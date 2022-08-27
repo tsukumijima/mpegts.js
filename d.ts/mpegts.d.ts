@@ -87,6 +87,34 @@ declare namespace Mpegts {
         liveBufferLatencyMinRemain?: number;
 
         /**
+         * @desc Chasing the live stream latency caused by the internal buffer in HTMLMediaElement
+         *       by changing the playbackRate. `isLive` should also be set to `true`
+         * @defaultvalue false
+         */
+        liveSync?: boolean;
+
+        /**
+         * @desc Maximum acceptable buffer latency in HTMLMediaElement, in seconds.
+         *       Effective only if `isLive: true` and `liveSync: true`
+         * @defaultvalue 1.2
+         */
+        liveSyncMaxLatency?: number;
+
+        /**
+         * @desc Target latency in HTMLMediaElement to chase when latency exceeds liveSyncMaxLatency, in seconds.
+         *       Effective only if `isLive: true` and `liveSync: true`
+         * @defaultvalue 0.8
+         */
+        liveSyncTargetLatency?: number;
+
+        /**
+         * @desc PlaybackRate limited between [1, 2] will be used for latency chasing.
+         *       Effective only if `isLive: true` and `liveSync: true`
+         * @defaultvalue 1.2
+         */
+         liveSyncPlaybackRate?: number;
+
+        /**
          * @desc Abort the http connection if there's enough data for playback.
          * @defaultvalue true
          */
