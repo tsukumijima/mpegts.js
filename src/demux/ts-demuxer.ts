@@ -28,6 +28,7 @@ import { AACADTSParser, AACFrame, AudioSpecificConfig } from './aac';
 import { MPEG4AudioObjectTypes, MPEG4SamplingFrequencyIndex } from './mpeg4-audio';
 import { PESPrivateData, PESPrivateDataDescriptor } from './pes-private-data';
 import { readSCTE35, SCTE35Data } from './scte35';
+import { H265AnnexBParser, H265NaluHVC1, H265NaluPayload, H265NaluType, HEVCDecoderConfigurationRecord } from './h265';
 
 class TSDemuxer extends BaseDemuxer {
 
@@ -53,10 +54,12 @@ class TSDemuxer extends BaseDemuxer {
     private section_slice_queues_: PIDToSliceQueues = {};
 
     private video_metadata_: {
-        sps: H264NaluAVC1 | undefined,
-        pps: H264NaluAVC1 | undefined,
+        vps: H265NaluHVC1 | undefined,
+        sps: H264NaluAVC1 | H265NaluHVC1 | undefined,
+        pps: H264NaluAVC1 | H265NaluHVC1 | undefined,
         sps_details: any
     } = {
+        vps: undefined,
         sps: undefined,
         pps: undefined,
         sps_details: undefined
@@ -265,6 +268,7 @@ class TSDemuxer extends BaseDemuxer {
 
                     // process PES only for known common_pids
                     if (pid === this.pmt_.common_pids.h264
+                            || pid === this.pmt_.common_pids.h265
                             || pid === this.pmt_.common_pids.adts_aac
                             || this.pmt_.pes_private_data_pids[pid] === true
                             || this.pmt_.timed_id3_pids[pid] === true) {
@@ -566,6 +570,8 @@ class TSDemuxer extends BaseDemuxer {
                     this.parseH264Payload(payload, pts, dts, pes_data.file_position, pes_data.random_access_indicator);
                     break;
                 case StreamType.kH265:
+                    this.parseH265Payload(payload, pts, dts, pes_data.file_position, pes_data.random_access_indicator);
+                    break;
                 default:
                     break;
             }
@@ -700,6 +706,8 @@ class TSDemuxer extends BaseDemuxer {
 
             if (stream_type === StreamType.kH264 && !pmt.common_pids.h264) {
                 pmt.common_pids.h264 = elementary_PID;
+            } else if (stream_type === StreamType.kH265 && !pmt.common_pids.h265) {
+                pmt.common_pids.h265 = elementary_PID;
             } else if (stream_type === StreamType.kADTSAAC && !pmt.common_pids.adts_aac) {
                 pmt.common_pids.adts_aac = elementary_PID;
             } else if (stream_type === StreamType.kPESPrivateData) {
@@ -723,7 +731,7 @@ class TSDemuxer extends BaseDemuxer {
                 Log.v(this.TAG, `Parsed first PMT: ${JSON.stringify(pmt)}`);
             }
             this.pmt_ = pmt;
-            if (pmt.common_pids.h264) {
+            if (pmt.common_pids.h264 || pmt.common_pids.h265) {
                 this.has_video_ = true;
             }
             if (pmt.common_pids.adts_aac) {
@@ -759,14 +767,14 @@ class TSDemuxer extends BaseDemuxer {
 
             if (nalu_avc1.type === H264NaluType.kSliceSPS) {
                 // Notice: parseSPS requires Nalu without startcode or length-header
-                let sps_details = SPSParser.parseSPS(nalu_payload.data);
+                let sps_details = SPSParser.parseAVCSPS(nalu_payload.data);
                 if (!this.video_init_segment_dispatched_) {
                     this.video_metadata_.sps = nalu_avc1;
                     this.video_metadata_.sps_details = sps_details;
                 } else if (this.detectVideoMetadataChange(nalu_avc1, sps_details) === true) {
                     Log.v(this.TAG, `H264: Critical h264 metadata has been changed, attempt to re-generate InitSegment`);
                     this.video_metadata_changed_ = true;
-                    this.video_metadata_ = {sps: nalu_avc1, pps: undefined, sps_details: sps_details};
+                    this.video_metadata_ = {vps: undefined, sps: nalu_avc1, pps: undefined, sps_details: sps_details};
                 }
             } else if (nalu_avc1.type === H264NaluType.kSlicePPS) {
                 if (!this.video_init_segment_dispatched_ || this.video_metadata_changed_) {
@@ -809,6 +817,81 @@ class TSDemuxer extends BaseDemuxer {
                 file_position
             };
             track.samples.push(avc_sample);
+            track.length += length;
+        }
+    }
+
+    private parseH265Payload(data: Uint8Array, pts: number, dts: number, file_position: number, random_access_indicator: number) {
+        let annexb_parser = new H265AnnexBParser(data);
+        let nalu_payload: H265NaluPayload = null;
+        let units: {type: H265NaluType, data: Uint8Array}[] = [];
+        let length = 0;
+        let keyframe = false;
+
+        while ((nalu_payload = annexb_parser.readNextNaluPayload()) != null) {
+            let nalu_hvc1 = new H265NaluHVC1(nalu_payload);
+
+            if (nalu_hvc1.type === H265NaluType.kSliceVPS) {
+                if (!this.video_init_segment_dispatched_) {
+                    this.video_metadata_.vps = nalu_hvc1;
+                }
+            } else if (nalu_hvc1.type === H265NaluType.kSliceSPS) {
+                let sps_details = SPSParser.parseHEVCSPS(nalu_payload.data);
+                if (!this.video_init_segment_dispatched_) {
+                    this.video_metadata_.sps = nalu_hvc1;
+                    this.video_metadata_.sps_details = sps_details;
+                }
+                /*
+                // Notice: parseSPS requires Nalu without startcode or length-header
+                let sps_details = SPSParser.parseSPS(nalu_payload.data);
+                if (!this.video_init_segment_dispatched_) {
+                    this.video_metadata_.sps = nalu_avc1;
+                    this.video_metadata_.sps_details = sps_details;
+                } else if (this.detectVideoMetadataChange(nalu_avc1, sps_details) === true) {
+                    Log.v(this.TAG, `H264: Critical h264 metadata has been changed, attempt to re-generate InitSegment`);
+                    this.video_metadata_changed_ = true;
+                    this.video_metadata_ = {sps: nalu_avc1, pps: undefined, sps_details: sps_details};
+                }
+                */
+            } else if (nalu_hvc1.type === H265NaluType.kSlicePPS) {
+                if (!this.video_init_segment_dispatched_ || this.video_metadata_changed_) {
+                    this.video_metadata_.pps = nalu_hvc1;
+
+                    if (this.video_metadata_.vps && this.video_metadata_.sps && this.video_metadata_.pps) {
+                        if (this.video_metadata_changed_) {
+                            // flush stashed frames before changing codec metadata
+                            this.dispatchVideoMediaSegment();
+                        }
+                        // notify new codec metadata (maybe changed)
+                        this.dispatchVideoInitSegment();
+                    }
+                }
+            } else if (nalu_hvc1.type === H265NaluType.kSliceIDR_W_RADL || nalu_hvc1.type === H265NaluType.kSliceIDR_N_LP) {
+                keyframe = true;
+            }
+
+            // Push samples to remuxer only if initialization metadata has been dispatched
+            if (this.video_init_segment_dispatched_) {
+                units.push(nalu_hvc1);
+                length += nalu_hvc1.data.byteLength;
+            }
+        }
+
+        let pts_ms = Math.floor(pts / this.timescale_);
+        let dts_ms = Math.floor(dts / this.timescale_);
+
+        if (units.length) {
+            let track = this.video_track_;
+            let hvc_sample = {
+                units,
+                length,
+                isKeyframe: keyframe,
+                dts: dts_ms,
+                pts: pts_ms,
+                cts: pts_ms - dts_ms,
+                file_position
+            };
+            track.samples.push(hvc_sample);
             track.length += length;
         }
     }
@@ -878,16 +961,27 @@ class TSDemuxer extends BaseDemuxer {
 
         meta.codec = sps_details.codec_mimetype;
 
-        let sps_without_header = this.video_metadata_.sps.data.subarray(4);
-        let pps_without_header = this.video_metadata_.pps.data.subarray(4);
+        if (this.video_metadata_.vps) {
+            let vps_without_header = this.video_metadata_.vps.data.subarray(4);
+            let sps_without_header = this.video_metadata_.sps.data.subarray(4);
+            let pps_without_header = this.video_metadata_.pps.data.subarray(4);
+            let hvcc = new HEVCDecoderConfigurationRecord(vps_without_header, sps_without_header, pps_without_header, sps_details);
+            meta.hvcc = hvcc.getData();
+            meta.codec = 'hvc1.1.6.L30.B0'
 
-        let avcc = new AVCDecoderConfigurationRecord(sps_without_header, pps_without_header, sps_details);
-        meta.avcc = avcc.getData();
+            if (this.video_init_segment_dispatched_ == false) {
+                Log.v(this.TAG, `Generated first HEVCDecoderConfigurationRecord for mimeType: ${meta.codec}`);
+            }
+        } else {
+            let sps_without_header = this.video_metadata_.sps.data.subarray(4);
+            let pps_without_header = this.video_metadata_.pps.data.subarray(4);
+            let avcc = new AVCDecoderConfigurationRecord(sps_without_header, pps_without_header, sps_details);
+            meta.avcc = avcc.getData();
 
-        if (this.video_init_segment_dispatched_ == false) {
-            Log.v(this.TAG, `Generated first AVCDecoderConfigurationRecord for mimeType: ${meta.codec}`);
+            if (this.video_init_segment_dispatched_ == false) {
+                Log.v(this.TAG, `Generated first AVCDecoderConfigurationRecord for mimeType: ${meta.codec}`);
+            }
         }
-
         this.onTrackMetadata('video', meta);
         this.video_init_segment_dispatched_ = true;
         this.video_metadata_changed_ = false;
