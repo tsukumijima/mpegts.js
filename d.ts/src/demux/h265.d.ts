@@ -26,7 +26,11 @@ export declare class H265AnnexBParser {
 }
 export declare type HEVCDecoderConfigurationRecordType = {
     configurationVersion: 1;
-} & SPSHEVCDecoderConfigurationRecordType;
+} & VPSHEVCDecoderConfigurationRecordType & SPSHEVCDecoderConfigurationRecordType & PPSHEVCDecoderConfigurationRecordType;
+export declare type VPSHEVCDecoderConfigurationRecordType = {
+    num_temporal_layers: number;
+    temporal_id_nested: boolean;
+};
 export declare type SPSHEVCDecoderConfigurationRecordType = {
     general_profile_space: number;
     general_tier_flag: number;
@@ -41,7 +45,14 @@ export declare type SPSHEVCDecoderConfigurationRecordType = {
     general_constraint_indicator_flags_4: number;
     general_constraint_indicator_flags_5: number;
     general_constraint_indicator_flags_6: number;
+    constant_frame_rate: number;
     min_spatial_segmentation_idc: number;
+    chroma_format_idc: number;
+    bit_depth_luma_minus8: number;
+    bit_depth_chroma_minus8: number;
+};
+export declare type PPSHEVCDecoderConfigurationRecordType = {
+    parallelismType: number;
 };
 export declare class HEVCDecoderConfigurationRecord {
     private data;

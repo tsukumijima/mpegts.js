@@ -29,6 +29,7 @@ import { MPEG4AudioObjectTypes, MPEG4SamplingFrequencyIndex } from './mpeg4-audi
 import { PESPrivateData, PESPrivateDataDescriptor } from './pes-private-data';
 import { readSCTE35, SCTE35Data } from './scte35';
 import { H265AnnexBParser, H265NaluHVC1, H265NaluPayload, H265NaluType, HEVCDecoderConfigurationRecord } from './h265';
+import H265Parser from './h265-parser';
 
 class TSDemuxer extends BaseDemuxer {
 
@@ -57,12 +58,12 @@ class TSDemuxer extends BaseDemuxer {
         vps: H265NaluHVC1 | undefined,
         sps: H264NaluAVC1 | H265NaluHVC1 | undefined,
         pps: H264NaluAVC1 | H265NaluHVC1 | undefined,
-        sps_details: any
+        details: any
     } = {
         vps: undefined,
         sps: undefined,
         pps: undefined,
-        sps_details: undefined
+        details: undefined
     };
 
     private audio_metadata_: {
@@ -704,9 +705,9 @@ class TSDemuxer extends BaseDemuxer {
 
             pmt.pid_stream_type[elementary_PID] = stream_type;
 
-            if (stream_type === StreamType.kH264 && !pmt.common_pids.h264) {
+            if (stream_type === StreamType.kH264 && !pmt.common_pids.h264 && !pmt.common_pids.h265) {
                 pmt.common_pids.h264 = elementary_PID;
-            } else if (stream_type === StreamType.kH265 && !pmt.common_pids.h265) {
+            } else if (stream_type === StreamType.kH265 && !pmt.common_pids.h264 && !pmt.common_pids.h265) {
                 pmt.common_pids.h265 = elementary_PID;
             } else if (stream_type === StreamType.kADTSAAC && !pmt.common_pids.adts_aac) {
                 pmt.common_pids.adts_aac = elementary_PID;
@@ -767,14 +768,14 @@ class TSDemuxer extends BaseDemuxer {
 
             if (nalu_avc1.type === H264NaluType.kSliceSPS) {
                 // Notice: parseSPS requires Nalu without startcode or length-header
-                let sps_details = SPSParser.parseAVCSPS(nalu_payload.data);
+                let details = SPSParser.parseSPS(nalu_payload.data);
                 if (!this.video_init_segment_dispatched_) {
                     this.video_metadata_.sps = nalu_avc1;
-                    this.video_metadata_.sps_details = sps_details;
-                } else if (this.detectVideoMetadataChange(nalu_avc1, sps_details) === true) {
+                    this.video_metadata_.details = details;
+                } else if (this.detectVideoMetadataChange(nalu_avc1, details) === true) {
                     Log.v(this.TAG, `H264: Critical h264 metadata has been changed, attempt to re-generate InitSegment`);
                     this.video_metadata_changed_ = true;
-                    this.video_metadata_ = {vps: undefined, sps: nalu_avc1, pps: undefined, sps_details: sps_details};
+                    this.video_metadata_ = {vps: undefined, sps: nalu_avc1, pps: undefined, details: details};
                 }
             } else if (nalu_avc1.type === H264NaluType.kSlicePPS) {
                 if (!this.video_init_segment_dispatched_ || this.video_metadata_changed_) {
@@ -833,29 +834,34 @@ class TSDemuxer extends BaseDemuxer {
 
             if (nalu_hvc1.type === H265NaluType.kSliceVPS) {
                 if (!this.video_init_segment_dispatched_) {
+                    let details = H265Parser.parsePPS(nalu_payload.data);
                     this.video_metadata_.vps = nalu_hvc1;
+                    this.video_metadata_.details = {
+                        ... this.video_metadata_.details, 
+                        ... details
+                    };
                 }
             } else if (nalu_hvc1.type === H265NaluType.kSliceSPS) {
-                let sps_details = SPSParser.parseHEVCSPS(nalu_payload.data);
+                let details = H265Parser.parseSPS(nalu_payload.data);
                 if (!this.video_init_segment_dispatched_) {
                     this.video_metadata_.sps = nalu_hvc1;
-                    this.video_metadata_.sps_details = sps_details;
-                }
-                /*
-                // Notice: parseSPS requires Nalu without startcode or length-header
-                let sps_details = SPSParser.parseSPS(nalu_payload.data);
-                if (!this.video_init_segment_dispatched_) {
-                    this.video_metadata_.sps = nalu_avc1;
-                    this.video_metadata_.sps_details = sps_details;
-                } else if (this.detectVideoMetadataChange(nalu_avc1, sps_details) === true) {
-                    Log.v(this.TAG, `H264: Critical h264 metadata has been changed, attempt to re-generate InitSegment`);
+                    this.video_metadata_.details = {
+                        ... this.video_metadata_.details, 
+                        ... details
+                    };
+                } else if (this.detectVideoMetadataChange(nalu_hvc1, details) === true) {
+                    Log.v(this.TAG, `H265: Critical h265 metadata has been changed, attempt to re-generate InitSegment`);
                     this.video_metadata_changed_ = true;
-                    this.video_metadata_ = {sps: nalu_avc1, pps: undefined, sps_details: sps_details};
+                    this.video_metadata_ = { vps: undefined, sps: nalu_hvc1, pps: undefined, details: details};
                 }
-                */
             } else if (nalu_hvc1.type === H265NaluType.kSlicePPS) {
                 if (!this.video_init_segment_dispatched_ || this.video_metadata_changed_) {
+                    let details = H265Parser.parsePPS(nalu_payload.data);
                     this.video_metadata_.pps = nalu_hvc1;
+                    this.video_metadata_.details = {
+                        ... this.video_metadata_.details, 
+                        ... details
+                    };
 
                     if (this.video_metadata_.vps && this.video_metadata_.sps && this.video_metadata_.pps) {
                         if (this.video_metadata_changed_) {
@@ -896,25 +902,25 @@ class TSDemuxer extends BaseDemuxer {
         }
     }
 
-    private detectVideoMetadataChange(new_sps: H264NaluAVC1, new_sps_details: any): boolean {
-        if (new_sps_details.codec_mimetype !== this.video_metadata_.sps_details.codec_mimetype) {
-            Log.v(this.TAG, `H264: Codec mimeType changed from ` +
-                            `${this.video_metadata_.sps_details.codec_mimetype} to ${new_sps_details.codec_mimetype}`);
+    private detectVideoMetadataChange(new_sps: H264NaluAVC1 | H265NaluHVC1, new_details: any): boolean {
+        if (new_details.codec_mimetype !== this.video_metadata_.details.codec_mimetype) {
+            Log.v(this.TAG, `Video: Codec mimeType changed from ` +
+                            `${this.video_metadata_.details.codec_mimetype} to ${new_details.codec_mimetype}`);
             return true;
         }
 
-        if (new_sps_details.codec_size.width !== this.video_metadata_.sps_details.codec_size.width
-            || new_sps_details.codec_size.height !== this.video_metadata_.sps_details.codec_size.height) {
-            let old_size = this.video_metadata_.sps_details.codec_size;
-            let new_size = new_sps_details.codec_size;
-            Log.v(this.TAG, `H264: Coded Resolution changed from ` +
+        if (new_details.codec_size.width !== this.video_metadata_.details.codec_size.width
+            || new_details.codec_size.height !== this.video_metadata_.details.codec_size.height) {
+            let old_size = this.video_metadata_.details.codec_size;
+            let new_size = new_details.codec_size;
+            Log.v(this.TAG, `Video: Coded Resolution changed from ` +
                             `${old_size.width}x${old_size.height} to ${new_size.width}x${new_size.height}`);
             return true;
         }
 
-        if (new_sps_details.present_size.width !== this.video_metadata_.sps_details.present_size.width) {
-            Log.v(this.TAG, `H264: Present resolution width changed from ` +
-                            `${this.video_metadata_.sps_details.present_size.width} to ${new_sps_details.present_size.width}`);
+        if (new_details.present_size.width !== this.video_metadata_.details.present_size.width) {
+            Log.v(this.TAG, `Video: Present resolution width changed from ` +
+                            `${this.video_metadata_.details.present_size.width} to ${new_details.present_size.width}`);
             return true;
         }
 
@@ -935,7 +941,7 @@ class TSDemuxer extends BaseDemuxer {
     }
 
     private dispatchVideoInitSegment() {
-        let sps_details = this.video_metadata_.sps_details;
+        let details = this.video_metadata_.details;
         let meta: any = {};
 
         meta.type = 'video';
@@ -943,31 +949,30 @@ class TSDemuxer extends BaseDemuxer {
         meta.timescale = 1000;
         meta.duration = this.duration_;
 
-        meta.codecWidth = sps_details.codec_size.width;
-        meta.codecHeight = sps_details.codec_size.height;
-        meta.presentWidth = sps_details.present_size.width;
-        meta.presentHeight = sps_details.present_size.height;
+        meta.codecWidth = details.codec_size.width;
+        meta.codecHeight = details.codec_size.height;
+        meta.presentWidth = details.present_size.width;
+        meta.presentHeight = details.present_size.height;
 
-        meta.profile = sps_details.profile_string;
-        meta.level = sps_details.level_string;
-        meta.bitDepth = sps_details.bit_depth;
-        meta.chromaFormat = sps_details.chroma_format;
-        meta.sarRatio = sps_details.sar_ratio;
-        meta.frameRate = sps_details.frame_rate;
+        meta.profile = details.profile_string;
+        meta.level = details.level_string;
+        meta.bitDepth = details.bit_depth;
+        meta.chromaFormat = details.chroma_format;
+        meta.sarRatio = details.sar_ratio;
+        meta.frameRate = details.frame_rate;
 
         let fps_den = meta.frameRate.fps_den;
         let fps_num = meta.frameRate.fps_num;
         meta.refSampleDuration = 1000 * (fps_den / fps_num);
 
-        meta.codec = sps_details.codec_mimetype;
+        meta.codec = details.codec_mimetype;
 
         if (this.video_metadata_.vps) {
             let vps_without_header = this.video_metadata_.vps.data.subarray(4);
             let sps_without_header = this.video_metadata_.sps.data.subarray(4);
             let pps_without_header = this.video_metadata_.pps.data.subarray(4);
-            let hvcc = new HEVCDecoderConfigurationRecord(vps_without_header, sps_without_header, pps_without_header, sps_details);
+            let hvcc = new HEVCDecoderConfigurationRecord(vps_without_header, sps_without_header, pps_without_header, details);
             meta.hvcc = hvcc.getData();
-            meta.codec = 'hvc1.1.6.L30.B0'
 
             if (this.video_init_segment_dispatched_ == false) {
                 Log.v(this.TAG, `Generated first HEVCDecoderConfigurationRecord for mimeType: ${meta.codec}`);
@@ -975,7 +980,7 @@ class TSDemuxer extends BaseDemuxer {
         } else {
             let sps_without_header = this.video_metadata_.sps.data.subarray(4);
             let pps_without_header = this.video_metadata_.pps.data.subarray(4);
-            let avcc = new AVCDecoderConfigurationRecord(sps_without_header, pps_without_header, sps_details);
+            let avcc = new AVCDecoderConfigurationRecord(sps_without_header, pps_without_header, details);
             meta.avcc = avcc.getData();
 
             if (this.video_init_segment_dispatched_ == false) {
@@ -994,8 +999,8 @@ class TSDemuxer extends BaseDemuxer {
         mi.fps = meta.frameRate.fps;
         mi.profile = meta.profile;
         mi.level = meta.level;
-        mi.refFrames = sps_details.ref_frames;
-        mi.chromaFormat = sps_details.chroma_format_string;
+        mi.refFrames = details.ref_frames;
+        mi.chromaFormat = details.chroma_format_string;
         mi.sarNum = meta.sarRatio.width;
         mi.sarDen = meta.sarRatio.height;
         mi.videoCodec = meta.codec;

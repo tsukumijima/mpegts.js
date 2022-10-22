@@ -119,7 +119,12 @@ export class H265AnnexBParser {
 
 export type HEVCDecoderConfigurationRecordType = {
     configurationVersion: 1;
-} & SPSHEVCDecoderConfigurationRecordType;
+} & VPSHEVCDecoderConfigurationRecordType & SPSHEVCDecoderConfigurationRecordType & PPSHEVCDecoderConfigurationRecordType;
+
+export type VPSHEVCDecoderConfigurationRecordType = {
+    num_temporal_layers: number;
+    temporal_id_nested: boolean;
+}
 
 export type SPSHEVCDecoderConfigurationRecordType = {
     general_profile_space: number;
@@ -135,7 +140,15 @@ export type SPSHEVCDecoderConfigurationRecordType = {
     general_constraint_indicator_flags_4: number;
     general_constraint_indicator_flags_5: number;
     general_constraint_indicator_flags_6: number;
+    constant_frame_rate: number;
     min_spatial_segmentation_idc: number;
+    chroma_format_idc: number,
+    bit_depth_luma_minus8: number,
+    bit_depth_chroma_minus8: number,
+}
+
+export type PPSHEVCDecoderConfigurationRecordType = {
+    parallelismType: number;
 }
 
 export class HEVCDecoderConfigurationRecord {
@@ -162,13 +175,13 @@ export class HEVCDecoderConfigurationRecord {
         data[12] = 0x3C;
         data[13] = 0xF0 | ((detail.min_spatial_segmentation_idc & 0x0F00) >> 8)
         data[14] = (detail.min_spatial_segmentation_idc & 0xFF);
-        data[15] = 0xFC | (/*parallelismType*/ 0 & 0x03);
-        data[16] = 0xFC | (/*chromaFormat*/ 3 & 0x03);
-        data[17] = 0xF8 | (/*bitDepthLumaMinus8*/ 0 & 0x07);
-        data[18] = 0xF8 | (/*bitDepthChromaMinus8*/ 0 & 0x07);
+        data[15] = 0xFC | (detail.parallelismType & 0x03);
+        data[16] = 0xFC | (detail.chroma_format_idc & 0x03);
+        data[17] = 0xF8 | (detail.bit_depth_luma_minus8 & 0x07);
+        data[18] = 0xF8 | (detail.bit_depth_chroma_minus8 & 0x07);
         data[19] = 0;
         data[20] = 0;
-        data[21] = ((/*constantFrameRate*/ 0 & 0x03) << 6) | ((/*numTemporalLayers*/ 1 & 0x07) << 3) | ((/*temporalIdNested*/ 1 ? 1 : 0) << 2) | 3;
+        data[21] = ((detail.constant_frame_rate & 0x03) << 6) | ((detail.num_temporal_layers & 0x07) << 3) | ((detail.temporal_id_nested ? 1 : 0) << 2) | 3;
         data[22] = 3;
         data[23 + 0 + 0] = 0x80 | H265NaluType.kSliceVPS;
         data[23 + 0 + 1] = 0;
