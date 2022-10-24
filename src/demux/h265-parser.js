@@ -357,6 +357,13 @@ class H265NaluParser {
         let codec_width = pic_width_in_luma_samples;
         let codec_height = pic_height_in_luma_samples;
         let sar_scale = 1;
+
+        // workaround!!!
+        if (codec_width === 1440 && codec_height === 1088) {
+            sar_width = 4;
+            sar_height = 3;
+        }
+
         if (sar_width !== 1 && sar_height !== 1) {
             sar_scale = sar_width / sar_height;
         }
