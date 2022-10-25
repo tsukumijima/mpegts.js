@@ -103,8 +103,8 @@ class H265NaluParser {
         }
         for (let i = 0; i < max_sub_layers_minus1; i++) {
             if (sub_layer_profile_present_flag[i]) {
-                gb.readByte();
-                gb.readByte(); gb.readByte(); gb.readByte(); gb.readByte();
+                gb.readByte(); // sub_layer_profile_space, sub_layer_tier_flag, sub_layer_profile_idc
+                gb.readByte(); gb.readByte(); gb.readByte(); gb.readByte(); // sub_layer_profile_compatibility_flag
                 gb.readByte(); gb.readByte(); gb.readByte(); gb.readByte(); gb.readByte(); gb.readByte();
             }
             if (sub_layer_profile_present_flag[i]) {
@@ -147,7 +147,7 @@ class H265NaluParser {
             let sps_scaling_list_data_present_flag = gb.readBool();
             if (sps_scaling_list_data_present_flag) {
                 for (let sizeId = 0; sizeId < 4; sizeId++) {
-                    for(let matrixId = 0; matrixId < ((sizeId == 3) ? 2 : 6); matrixId++){
+                    for(let matrixId = 0; matrixId < ((sizeId === 3) ? 2 : 6); matrixId++){
                         let scaling_list_pred_mode_flag = gb.readBool();
                         if (!scaling_list_pred_mode_flag) {
                             gb.readUEG(); // scaling_list_pred_matrix_id_delta
@@ -178,7 +178,7 @@ class H265NaluParser {
                 if (i === num_short_term_ref_pic_sets) { gb.readUEG(); }
                 gb.readBool();
                 gb.readUEG();
-                let next_num_delta_pocs = num_delta_pocs;
+                let next_num_delta_pocs = 0;
                 for (let j = 0; j <= num_delta_pocs; j++) {
                     let used_by_curr_pic_flag = gb.readBool();
                     let use_delta_flag = false;
@@ -208,7 +208,7 @@ class H265NaluParser {
         if (long_term_ref_pics_present_flag) {
             let num_long_term_ref_pics_sps = gb.readUEG();
             for (let i = 0; i < num_long_term_ref_pics_sps; i++) {
-                for (let j = 0; j < 2 ** log2_max_pic_order_cnt_lsb; j++) { gb.readBits(1); }
+                for (let j = 0; j < (log2_max_pic_order_cnt_lsb_minus4 + 4); j++) { gb.readBits(1); }
                 gb.readBits(1);
             }
         }
@@ -217,7 +217,6 @@ class H265NaluParser {
         let min_spatial_segmentation_idc = 0; // for hvcC
         let sar_width = 1, sar_height = 1;
         let fps_fixed = false, fps_den = 1, fps_num = 1;
-        ;
         //*/
         let sps_temporal_mvp_enabled_flag = gb.readBool();
         let strong_intra_smoothing_enabled_flag = gb.readBool();
@@ -357,13 +356,6 @@ class H265NaluParser {
         let codec_width = pic_width_in_luma_samples;
         let codec_height = pic_height_in_luma_samples;
         let sar_scale = 1;
-
-        // workaround!!!
-        if (codec_width === 1440 && codec_height === 1088) {
-            sar_width = 4;
-            sar_height = 3;
-        }
-
         if (sar_width !== 1 && sar_height !== 1) {
             sar_scale = sar_width / sar_height;
         }
