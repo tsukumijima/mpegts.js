@@ -1,7 +1,7 @@
 /*
- * Copyright (C) 2016 Bilibili. All Rights Reserved.
+ * Copyright (C) 2022 もにょてっく. All Rights Reserved.
  *
- * @author zheng qian <xqq@xqq.im>
+ * @author もにょ〜ん <monyone.teihen@gmail.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -342,11 +342,11 @@ class H265NaluParser {
                 let tiles_fixed_structure_flag = gb.readBool()
                 let motion_vectors_over_pic_boundaries_flag = gb.readBool()
                 let restricted_ref_pic_lists_flag = gb.readBool();
-                min_spatial_segmentation_idc = gb.readUEG(); 
-                let max_bytes_per_pic_denom = gb.readUEG(); 
-                let max_bits_per_min_cu_denom = gb.readUEG(); 
-                let log2_max_mv_length_horizontal = gb.readUEG(); 
-                let log2_max_mv_length_vertical = gb.readUEG(); 
+                min_spatial_segmentation_idc = gb.readUEG();
+                let max_bytes_per_pic_denom = gb.readUEG();
+                let max_bits_per_min_cu_denom = gb.readUEG();
+                let log2_max_mv_length_horizontal = gb.readUEG();
+                let log2_max_mv_length_vertical = gb.readUEG();
             }
         }
         let sps_extension_flag = gb.readBool(); // ignore...
@@ -481,7 +481,7 @@ class H265NaluParser {
             case 2: return 'Main10';
             case 3: return 'MainSP';
             case 4: return 'Rext';
-            case 9: return 'SCC';            
+            case 9: return 'SCC';
             default: return 'Unknown';
         }
     }
