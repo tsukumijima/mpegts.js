@@ -279,11 +279,12 @@ class H265NaluParser {
                         let commonInfPresentFlag = 1;
                         let nal_hrd_parameters_present_flag = false;
                         let vcl_hrd_parameters_present_flag = false;
+                        let sub_pic_hrd_params_present_flag = false;
                         if (commonInfPresentFlag) {
                             nal_hrd_parameters_present_flag = gb.readBool();
                             vcl_hrd_parameters_present_flag = gb.readBool();
                             if( nal_hrd_parameters_present_flag || vcl_hrd_parameters_present_flag ){
-                                let sub_pic_hrd_params_present_flag = gb.readBool();
+                                sub_pic_hrd_params_present_flag = gb.readBool();
                                 if (sub_pic_hrd_params_present_flag) {
                                     gb.readByte();
                                     gb.readBits(5);
@@ -315,7 +316,7 @@ class H265NaluParser {
                                 low_delay_hrd_flag = gb.readBool();
                             }
                             if (!low_delay_hrd_flag) {
-                                cpbcnt = gb.readUEG() + 1;
+                                cpbCnt = gb.readUEG() + 1;
                             }
                             if (nal_hrd_parameters_present_flag) {
                                 for (let j = 0; j < cpbCnt; j++) {
