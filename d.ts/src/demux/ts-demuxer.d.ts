@@ -31,7 +31,14 @@ declare class TSDemuxer extends BaseDemuxer {
     constructor(probe_data: any, config: any);
     destroy(): void;
     static probe(buffer: ArrayBuffer): {
+        needMoreData: boolean;
+        match?: undefined;
+        consumed?: undefined;
+        ts_packet_size?: undefined;
+        sync_offset?: undefined;
+    } | {
         match: boolean;
+        needMoreData?: undefined;
         consumed?: undefined;
         ts_packet_size?: undefined;
         sync_offset?: undefined;
@@ -40,6 +47,7 @@ declare class TSDemuxer extends BaseDemuxer {
         consumed: number;
         ts_packet_size: number;
         sync_offset: number;
+        needMoreData?: undefined;
     };
     bindDataSource(loader: any): this;
     resetMediaInfo(): void;
