@@ -294,8 +294,8 @@ declare namespace Mpegts {
         nativeWebmVP9Playback: boolean;
     }
 
-    interface PlayerConstructor {
-        new (mediaDataSource: MediaDataSource, config?: Config): Player;
+    interface PlayerConstructor<T extends Player> {
+        new (mediaDataSource: MediaDataSource, config?: Config): T;
     }
 
     interface Player {
@@ -466,8 +466,8 @@ declare var Mpegts: {
     readonly ErrorTypes: Readonly<Mpegts.ErrorTypes>;
     readonly ErrorDetails: Readonly<Mpegts.ErrorDetails>;
 
-    readonly MSEPlayer: Mpegts.PlayerConstructor;
-    readonly NativePlayer: Mpegts.PlayerConstructor;
+    readonly MSEPlayer: Mpegts.PlayerConstructor<Mpegts.MSEPlayer>;
+    readonly NativePlayer: Mpegts.PlayerConstructor<Mpegts.NativePlayer>;
     readonly LoggingControl: Mpegts.LoggingControl;
 };
 
