@@ -24,14 +24,15 @@ class MP4 {
         MP4.types = {
             avc1: [], avcC: [], btrt: [], dinf: [],
             dref: [], esds: [], ftyp: [], hdlr: [],
-            hvc1: [], hvcC: [],
+            hvc1: [], hvcC: [], av01: [], av1C: [],
             mdat: [], mdhd: [], mdia: [], mfhd: [],
             minf: [], moof: [], moov: [], mp4a: [],
             mvex: [], mvhd: [], sdtp: [], stbl: [],
             stco: [], stsc: [], stsd: [], stsz: [],
             stts: [], tfdt: [], tfhd: [], traf: [],
             trak: [], trun: [], trex: [], tkhd: [],
-            vmhd: [], smhd: [], '.mp3': []
+            vmhd: [], smhd: [], '.mp3': [],
+            Opus: [], dOps: [], 'ac-3': [], dac3: [], 'ec-3': [], dec3: [],
         };
 
         for (let name in MP4.types) {
@@ -312,8 +313,8 @@ class MP4 {
             MP4.box(MP4.types.stsc, MP4.constants.STSC),  // Sample-To-Chunk
             MP4.box(MP4.types.stsz, MP4.constants.STSZ),  // Sample size
             MP4.box(MP4.types.stco, MP4.constants.STCO)   // Chunk offset
-        ); 
-        return result; 
+        );
+        return result;
     }
 
     // Sample description box
@@ -321,11 +322,19 @@ class MP4 {
         if (meta.type === 'audio') {
             if (meta.codec === 'mp3') {
                 return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.mp3(meta));
+            } else if (meta.codec === 'ac-3') {
+                return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.ac3(meta));
+            } else if (meta.codec === 'ec-3') {
+                return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.ec3(meta));
+            } else if(meta.codec === 'opus') {
+                return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.Opus(meta));
             }
             // else: aac -> mp4a
             return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.mp4a(meta));
         } else if (meta.type === 'video' && meta.codec.startsWith('hvc1')) {
             return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.hvc1(meta));
+        } else if (meta.type === 'video' && meta.codec.startsWith('av01')) {
+            return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.av01(meta));
         } else {
             return MP4.box(MP4.types.stsd, MP4.constants.STSD_PREFIX, MP4.avc1(meta));
         }
@@ -371,6 +380,46 @@ class MP4 {
         return MP4.box(MP4.types.mp4a, data, MP4.esds(meta));
     }
 
+    static ac3(meta) {
+        let channelCount = meta.channelCount;
+        let sampleRate = meta.audioSampleRate;
+
+        let data = new Uint8Array([
+            0x00, 0x00, 0x00, 0x00,  // reserved(4)
+            0x00, 0x00, 0x00, 0x01,  // reserved(2) + data_reference_index(2)
+            0x00, 0x00, 0x00, 0x00,  // reserved: 2 * 4 bytes
+            0x00, 0x00, 0x00, 0x00,
+            0x00, channelCount,      // channelCount(2)
+            0x00, 0x10,              // sampleSize(2)
+            0x00, 0x00, 0x00, 0x00,  // reserved(4)
+            (sampleRate >>> 8) & 0xFF,  // Audio sample rate
+            (sampleRate) & 0xFF,
+            0x00, 0x00
+        ]);
+
+        return MP4.box(MP4.types['ac-3'], data, MP4.box(MP4.types.dac3, new Uint8Array(meta.config)));
+    }
+
+    static ec3(meta) {
+        let channelCount = meta.channelCount;
+        let sampleRate = meta.audioSampleRate;
+
+        let data = new Uint8Array([
+            0x00, 0x00, 0x00, 0x00,  // reserved(4)
+            0x00, 0x00, 0x00, 0x01,  // reserved(2) + data_reference_index(2)
+            0x00, 0x00, 0x00, 0x00,  // reserved: 2 * 4 bytes
+            0x00, 0x00, 0x00, 0x00,
+            0x00, channelCount,      // channelCount(2)
+            0x00, 0x10,              // sampleSize(2)
+            0x00, 0x00, 0x00, 0x00,  // reserved(4)
+            (sampleRate >>> 8) & 0xFF,  // Audio sample rate
+            (sampleRate) & 0xFF,
+            0x00, 0x00
+        ]);
+
+        return MP4.box(MP4.types['ec-3'], data, MP4.box(MP4.types.dec3, new Uint8Array(meta.config)));
+    }
+
     static esds(meta) {
         let config = meta.config || [];
         let configSize = config.length;
@@ -399,6 +448,102 @@ class MP4 {
             0x06, 0x01, 0x02         // GASpecificConfig
         ]));
         return MP4.box(MP4.types.esds, data);
+    }
+
+    static Opus(meta) {
+        let channelCount = meta.channelCount;
+        let sampleRate = meta.audioSampleRate;
+
+        let data = new Uint8Array([
+            0x00, 0x00, 0x00, 0x00,  // reserved(4)
+            0x00, 0x00, 0x00, 0x01,  // reserved(2) + data_reference_index(2)
+            0x00, 0x00, 0x00, 0x00,  // reserved: 2 * 4 bytes
+            0x00, 0x00, 0x00, 0x00,
+            0x00, channelCount, // channelCount(2)
+            0x00, 0x10,              // sampleSize(2)
+            0x00, 0x00, 0x00, 0x00,  // reserved(4)
+            (sampleRate >>> 8) & 0xFF,  // Audio sample rate
+            (sampleRate) & 0xFF,
+            0x00, 0x00
+        ]);
+
+        return MP4.box(MP4.types.Opus, data, MP4.dOps(meta));
+    }
+
+    static dOps(meta) {
+        let channelCount = meta.channelCount;
+        let channelConfigCode = meta.channelConfigCode;
+        let sampleRate = meta.audioSampleRate;
+
+        if (meta.config) {
+            return MP4.box(MP4.types.dOps, data);
+        }
+
+        let mapping = [];
+        switch (channelConfigCode) {
+            case 0x01:
+            case 0x02:
+                mapping = [0x0];
+                break;
+            case 0x00: // dualmono
+                mapping = [0xFF, 1, 1, 0, 1];
+                break;
+            case 0x80: // dualmono
+                mapping = [0xFF, 2, 0, 0, 1];
+                break;
+            case 0x03:
+                mapping = [0x01, 2, 1, 0, 2, 1];
+                break;
+            case 0x04:
+                mapping = [0x01, 2, 2, 0, 1, 2, 3];
+                break;
+            case 0x05:
+                mapping = [0x01, 3, 2, 0, 4, 1, 2, 3];
+                break;
+            case 0x06:
+                mapping = [0x01, 4, 2, 0, 4, 1, 2, 3, 5];
+                break;
+            case 0x07:
+                mapping = [0x01, 4, 2, 0, 4, 1, 2, 3, 5, 6];
+                break;
+            case 0x08:
+                mapping = [0x01, 5, 3, 0, 6, 1, 2, 3, 4, 5, 7];
+                break;
+            case 0x82:
+                mapping = [0x01, 1, 2, 0, 1];
+                break;
+            case 0x83:
+                mapping = [0x01, 1, 3, 0, 1, 2];
+                break;
+            case 0x84:
+                mapping = [0x01, 1, 4, 0, 1, 2, 3];
+                break;
+            case 0x85:
+                mapping = [0x01, 1, 5, 0, 1, 2, 3, 4];
+                break;
+            case 0x86:
+                mapping = [0x01, 1, 6, 0, 1, 2, 3, 4, 5];
+                break;
+            case 0x87:
+                mapping = [0x01, 1, 7, 0, 1, 2, 3, 4, 5, 6];
+                break;
+            case 0x88:
+                mapping = [0x01, 1, 8, 0, 1, 2, 3, 4, 5, 6, 7];
+                break;
+        }
+
+        let data = new Uint8Array([
+            0x00,         // Version (1)
+            channelCount, // OutputChannelCount: 2
+            0x00, 0x00,   // PreSkip: 2
+            (sampleRate >>> 24) & 0xFF,  // Audio sample rate: 4
+            (sampleRate >>> 17) & 0xFF,
+            (sampleRate >>>  8) & 0xFF,
+            (sampleRate >>>  0) & 0xFF,
+            0x00, 0x00,  // Global Gain : 2
+            ... mapping
+        ]);
+        return MP4.box(MP4.types.dOps, data);
     }
 
     static avc1(meta) {
@@ -467,6 +612,40 @@ class MP4 {
             0xFF, 0xFF               // pre_defined = -1
         ]);
         return MP4.box(MP4.types.hvc1, data, MP4.box(MP4.types.hvcC, hvcc));
+    }
+
+    static av01(meta) {
+        let av1c = meta.av1c;
+        let width = meta.codecWidth || 192, height = meta.codecHeight || 108;
+
+        let data = new Uint8Array([
+            0x00, 0x00, 0x00, 0x00,  // reserved(4)
+            0x00, 0x00, 0x00, 0x01,  // reserved(2) + data_reference_index(2)
+            0x00, 0x00, 0x00, 0x00,  // pre_defined(2) + reserved(2)
+            0x00, 0x00, 0x00, 0x00,  // pre_defined: 3 * 4 bytes
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+            (width >>> 8) & 0xFF,    // width: 2 bytes
+            (width) & 0xFF,
+            (height >>> 8) & 0xFF,   // height: 2 bytes
+            (height) & 0xFF,
+            0x00, 0x48, 0x00, 0x00,  // horizresolution: 4 bytes
+            0x00, 0x48, 0x00, 0x00,  // vertresolution: 4 bytes
+            0x00, 0x00, 0x00, 0x00,  // reserved: 4 bytes
+            0x00, 0x01,              // frame_count
+            0x0A,                    // strlen
+            0x78, 0x71, 0x71, 0x2F,  // compressorname: 32 bytes
+            0x66, 0x6C, 0x76, 0x2E,
+            0x6A, 0x73, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00,
+            0x00, 0x18,              // depth
+            0xFF, 0xFF               // pre_defined = -1
+        ]);
+        return MP4.box(MP4.types.av01, data, MP4.box(MP4.types.av1C, av1c));
     }
 
     // Movie Extends box

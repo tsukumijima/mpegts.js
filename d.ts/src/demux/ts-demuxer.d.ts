@@ -25,6 +25,7 @@ declare class TSDemuxer extends BaseDemuxer {
     private audio_init_segment_dispatched_;
     private video_metadata_changed_;
     private audio_metadata_changed_;
+    private loas_previous_frame;
     private video_track_;
     private audio_track_;
     preferred_secondary_audio: boolean;
@@ -71,7 +72,11 @@ declare class TSDemuxer extends BaseDemuxer {
     private dispatchVideoMediaSegment;
     private dispatchAudioMediaSegment;
     private dispatchAudioVideoMediaSegment;
-    private parseAACPayload;
+    private parseADTSAACPayload;
+    private parseLOASAACPayload;
+    private parseAC3Payload;
+    private parseEAC3Payload;
+    private parseOpusPayload;
     private parseMP3Payload;
     private detectAudioMetadataChange;
     private dispatchAudioInitSegment;

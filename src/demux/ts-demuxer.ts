@@ -24,7 +24,7 @@ import BaseDemuxer from './base-demuxer';
 import { PAT, PESData, SectionData, SliceQueue, PIDToSliceQueues, PMT, ProgramToPMTMap, StreamType } from './pat-pmt-pes';
 import { AVCDecoderConfigurationRecord, H264AnnexBParser, H264NaluAVC1, H264NaluPayload, H264NaluType } from './h264';
 import SPSParser from './sps-parser';
-import { AACADTSParser, AACFrame, AudioSpecificConfig } from './aac';
+import { AACADTSParser, AACFrame, AACLOASParser, AudioSpecificConfig, LOASAACFrame } from './aac';
 import { MPEG4AudioObjectTypes, MPEG4SamplingFrequencyIndex } from './mpeg4-audio';
 import { PESPrivateData, PESPrivateDataDescriptor } from './pes-private-data';
 import { readSCTE35, SCTE35Data } from './scte35';
@@ -32,6 +32,7 @@ import { H265AnnexBParser, H265NaluHVC1, H265NaluPayload, H265NaluType, HEVCDeco
 import H265Parser from './h265-parser';
 import { SMPTE2038Data, smpte2038parse } from './smpte2038';
 import { MP3Data } from './mp3';
+import { AC3Config, AC3Frame, AC3Parser, EAC3Config, EAC3Frame, EAC3Parser } from './ac3';
 
 type AACAudioMetadata = {
     codec: 'aac',
@@ -40,6 +41,28 @@ type AACAudioMetadata = {
     sampling_frequency: number;
     channel_config: number;
 };
+type AC3AudioMetadata = {
+    codec: 'ac-3',
+    sampling_frequency: number;
+    bit_stream_identification: number;
+    bit_stream_mode: number;
+    low_frequency_effects_channel_on: number;
+    channel_mode: number;
+};
+type EAC3AudioMetadata = {
+    codec: 'ec-3',
+    sampling_frequency: number;
+    bit_stream_identification: number;
+    low_frequency_effects_channel_on: number;
+    channel_mode: number;
+    num_blks: number;
+};
+type OpusAudioMetadata = {
+    codec: 'opus';
+    channel_count: number;
+    channel_config_code: number;
+    sample_rate: number;
+}
 type MP3AudioMetadata = {
     codec: 'mp3',
     object_type: number,
@@ -49,6 +72,15 @@ type MP3AudioMetadata = {
 type AudioData = {
     codec: 'aac';
     data: AACFrame;
+} | {
+    codec: 'ac-3';
+    data: AC3Frame,
+} | {
+    codec: 'ec-3';
+    data: EAC3Frame,
+} | {
+    codec: 'opus';
+    meta: OpusAudioMetadata,
 } | {
     codec: 'mp3';
     data: MP3Data;
@@ -89,7 +121,7 @@ class TSDemuxer extends BaseDemuxer {
         details: undefined
     };
 
-    private audio_metadata_: AACAudioMetadata | MP3AudioMetadata = {
+    private audio_metadata_: AACAudioMetadata | AC3AudioMetadata | EAC3AudioMetadata | OpusAudioMetadata | MP3AudioMetadata = {
         codec: undefined,
         audio_object_type: undefined,
         sampling_freq_index: undefined,
@@ -106,6 +138,7 @@ class TSDemuxer extends BaseDemuxer {
     private audio_init_segment_dispatched_ = false;
     private video_metadata_changed_ = false;
     private audio_metadata_changed_ = false;
+    private loas_previous_frame: LOASAACFrame | null = null;
 
     private video_track_ = {type: 'video', id: 1, sequenceNumber: 0, samples: [], length: 0};
     private audio_track_ = {type: 'audio', id: 2, sequenceNumber: 0, samples: [], length: 0};
@@ -291,6 +324,10 @@ class TSDemuxer extends BaseDemuxer {
                     if (pid === this.pmt_.common_pids.h264
                             || pid === this.pmt_.common_pids.h265
                             || pid === this.pmt_.common_pids.adts_aac
+                            || pid === this.pmt_.common_pids.loas_aac
+                            || pid === this.pmt_.common_pids.ac3
+                            || pid === this.pmt_.common_pids.eac3
+                            || pid === this.pmt_.common_pids.opus
                             || pid === this.pmt_.common_pids.mp3
                             || this.pmt_.pes_private_data_pids[pid] === true
                             || this.pmt_.timed_id3_pids[pid] === true) {
@@ -581,14 +618,29 @@ class TSDemuxer extends BaseDemuxer {
                     this.parseMP3Payload(payload, pts);
                     break;
                 case StreamType.kPESPrivateData:
-                    if (this.pmt_.smpte2038_pids[pes_data.pid]) {
+                    if (this.pmt_.common_pids.opus === pes_data.pid) {
+                        this.parseOpusPayload(payload, pts);
+                    } else if (this.pmt_.common_pids.ac3 === pes_data.pid) {
+                        this.parseAC3Payload(payload, pts);
+                    } else if (this.pmt_.common_pids.eac3 === pes_data.pid) {
+                        this.parseEAC3Payload(payload, pts);
+                    } else if (this.pmt_.smpte2038_pids[pes_data.pid]) {
                         this.parseSMPTE2038MetadataPayload(payload, pts, dts, pes_data.pid, stream_id);
                     } else {
                         this.parsePESPrivateDataPayload(payload, pts, dts, pes_data.pid, stream_id);
                     }
                     break;
                 case StreamType.kADTSAAC:
-                    this.parseAACPayload(payload, pts);
+                    this.parseADTSAACPayload(payload, pts);
+                    break;
+                case StreamType.kLOASAAC:
+                    this.parseLOASAACPayload(payload, pts);
+                    break;
+                case StreamType.kAC3:
+                    this.parseAC3Payload(payload, pts);
+                    break;
+                case StreamType.kEAC3:
+                    this.parseEAC3Payload(payload, pts);
                     break;
                 case StreamType.kID3:
                     this.parseTimedID3MetadataPayload(payload, pts, dts, pes_data.pid, stream_id);
@@ -731,13 +783,23 @@ class TSDemuxer extends BaseDemuxer {
 
             pmt.pid_stream_type[elementary_PID] = stream_type;
 
-            if (stream_type === StreamType.kH264 && !pmt.common_pids.h264 && !pmt.common_pids.h265) {
+            let already_has_video =  pmt.common_pids.h264 || pmt.common_pids.h265;
+            let already_has_audio = pmt.common_pids.adts_aac || pmt.common_pids.loas_aac || pmt.common_pids.ac3 || pmt.common_pids.eac3 || pmt.common_pids.opus || pmt.common_pids.mp3;
+
+            if (stream_type === StreamType.kH264 && !already_has_video) {
                 pmt.common_pids.h264 = elementary_PID;
-            } else if (stream_type === StreamType.kH265 && !pmt.common_pids.h264 && !pmt.common_pids.h265) {
+            } else if (stream_type === StreamType.kH265 && !already_has_video) {
                 pmt.common_pids.h265 = elementary_PID;
-            } else if (stream_type === StreamType.kADTSAAC && (!pmt.common_pids.adts_aac || this.preferred_secondary_audio)) {
+            } else if (stream_type === StreamType.kADTSAAC && (!already_has_audio || this.preferred_secondary_audio)) {
                 pmt.common_pids.adts_aac = elementary_PID;
-            } else if ((stream_type === StreamType.kMPEG1Audio || stream_type === StreamType.kMPEG2Audio) && !pmt.common_pids.mp3) {
+            } else if (stream_type === StreamType.kLOASAAC && (!already_has_audio || this.preferred_secondary_audio)) {
+                pmt.common_pids.loas_aac = elementary_PID;
+            } else if (stream_type === StreamType.kAC3 && (!already_has_audio || this.preferred_secondary_audio)) {
+                pmt.common_pids.ac3 = elementary_PID; // ATSC AC-3
+            } else if (stream_type === StreamType.kEAC3 && (!already_has_audio || this.preferred_secondary_audio)) {
+                pmt.common_pids.eac3 = elementary_PID; // ATSC EAC-3
+            } else if ((stream_type === StreamType.kMPEG1Audio || stream_type === StreamType.kMPEG2Audio) &&
+                       (!already_has_audio || this.preferred_secondary_audio)) {
                 pmt.common_pids.mp3 = elementary_PID;
             } else if (stream_type === StreamType.kPESPrivateData) {
                 pmt.pes_private_data_pids[elementary_PID] = true;
@@ -751,8 +813,49 @@ class TSDemuxer extends BaseDemuxer {
 
                             if (registration === 'VANC') {
                                 pmt.smpte2038_pids[elementary_PID] = true;
+                            } /* else if (registration === 'AC-3' && !already_has_audio) {
+                                pmt.common_pids.ac3 = elementary_PID; // DVB AC-3 (FIXME: NEED VERIFY)
+                            } */ /* else if (registration === 'EC-3' && !alrady_has_audio) {
+                                pmt.common_pids.eac3 = elementary_PID; // DVB EAC-3 (FIXME: NEED VERIFY)
+                            } */ else if (registration === 'Opus') {
+                                pmt.common_pids.opus = elementary_PID;
+                            }
+                        } else if (tag === 0x7F) {  // DVB extension descriptor
+                            if (elementary_PID === pmt.common_pids.opus) {
+                                let ext_desc_tag = data[offset + 2];
+                                let channel_config_code: number | null = null;
+                                if (ext_desc_tag === 0x80) { // User defined (provisional Opus)
+                                    channel_config_code = data[offset + 3];
+                                }
+
+                                if (channel_config_code == null) {
+                                    Log.e(this.TAG, `Not Supported Opus channel count.`);
+                                    continue;
+                                }
+
+                                const meta = {
+                                    codec: 'opus',
+                                    channel_count: (channel_config_code & 0x0F) === 0 ? 2 : (channel_config_code & 0x0F),
+                                    channel_config_code,
+                                    sample_rate: 48000
+                                } as const;
+                                const sample = {
+                                    codec: 'opus',
+                                    meta
+                                } as const;
+
+                                if (this.audio_init_segment_dispatched_ == false) {
+                                    this.audio_metadata_ = meta;
+                                    this.dispatchAudioInitSegment(sample);
+                                } else if (this.detectAudioMetadataChange(sample)) {
+                                    // flush stashed frames before notify new AudioSpecificConfig
+                                    this.dispatchAudioMediaSegment();
+                                    // notify new AAC AudioSpecificConfig
+                                    this.dispatchAudioInitSegment(sample);
+                                }
                             }
                         }
+
                         offset += 2 + length;
                     }
                     // provide descriptor for PES private data via callback
@@ -776,7 +879,7 @@ class TSDemuxer extends BaseDemuxer {
             if (pmt.common_pids.h264 || pmt.common_pids.h265) {
                 this.has_video_ = true;
             }
-            if (pmt.common_pids.adts_aac || pmt.common_pids.mp3) {
+            if (pmt.common_pids.adts_aac || pmt.common_pids.loas_aac || pmt.common_pids.ac3 || pmt.common_pids.opus || pmt.common_pids.mp3) {
                 this.has_audio_ = true;
             }
         }
@@ -1081,7 +1184,7 @@ class TSDemuxer extends BaseDemuxer {
         }
     }
 
-    private parseAACPayload(data: Uint8Array, pts: number) {
+    private parseADTSAACPayload(data: Uint8Array, pts: number) {
         if (this.has_video_ && !this.video_init_segment_dispatched_) {
             // If first video IDR frame hasn't been detected,
             // Wait for first IDR frame and video init segment being dispatched
@@ -1167,6 +1270,313 @@ class TSDemuxer extends BaseDemuxer {
 
         if (adts_parser.hasIncompleteData()) {
             this.aac_last_incomplete_data_ = adts_parser.getIncompleteData();
+        }
+
+        if (last_sample_pts_ms) {
+            this.aac_last_sample_pts_ = last_sample_pts_ms;
+        }
+    }
+
+    private parseLOASAACPayload(data: Uint8Array, pts: number) {
+        if (this.has_video_ && !this.video_init_segment_dispatched_) {
+            // If first video IDR frame hasn't been detected,
+            // Wait for first IDR frame and video init segment being dispatched
+            return;
+        }
+
+        if (this.aac_last_incomplete_data_) {
+            let buf = new Uint8Array(data.byteLength + this.aac_last_incomplete_data_.byteLength);
+            buf.set(this.aac_last_incomplete_data_, 0);
+            buf.set(data, this.aac_last_incomplete_data_.byteLength);
+            data = buf;
+        }
+
+        let ref_sample_duration: number;
+        let base_pts_ms: number;
+
+        if (pts != undefined) {
+            base_pts_ms = pts / this.timescale_;
+        }
+        if (this.audio_metadata_.codec === 'aac') {
+            if (pts == undefined && this.aac_last_sample_pts_ != undefined) {
+                ref_sample_duration = 1024 / this.audio_metadata_.sampling_frequency * 1000;
+                base_pts_ms = this.aac_last_sample_pts_ + ref_sample_duration;
+            } else if (pts == undefined){
+                Log.w(this.TAG, `AAC: Unknown pts`);
+                return;
+            }
+
+            if (this.aac_last_incomplete_data_ && this.aac_last_sample_pts_) {
+                ref_sample_duration = 1024 / this.audio_metadata_.sampling_frequency * 1000;
+                let new_pts_ms = this.aac_last_sample_pts_ + ref_sample_duration;
+
+                if (Math.abs(new_pts_ms - base_pts_ms) > 1) {
+                    Log.w(this.TAG, `AAC: Detected pts overlapped, ` +
+                                    `expected: ${new_pts_ms}ms, PES pts: ${base_pts_ms}ms`);
+                    base_pts_ms = new_pts_ms;
+                }
+            }
+        }
+
+        let loas_parser = new AACLOASParser(data);
+        let aac_frame: LOASAACFrame = null;
+        let sample_pts_ms = base_pts_ms;
+        let last_sample_pts_ms: number;
+
+        while ((aac_frame = loas_parser.readNextAACFrame(this.loas_previous_frame ?? undefined)) != null) {
+            this.loas_previous_frame = aac_frame;
+            ref_sample_duration = 1024 / aac_frame.sampling_frequency * 1000;
+            const audio_sample = {
+                codec: 'aac',
+                data: aac_frame
+            } as const;
+
+            if (this.audio_init_segment_dispatched_ == false) {
+                this.audio_metadata_ = {
+                    codec: 'aac',
+                    audio_object_type: aac_frame.audio_object_type,
+                    sampling_freq_index: aac_frame.sampling_freq_index,
+                    sampling_frequency: aac_frame.sampling_frequency,
+                    channel_config: aac_frame.channel_config
+                };
+                this.dispatchAudioInitSegment(audio_sample);
+            } else if (this.detectAudioMetadataChange(audio_sample)) {
+                // flush stashed frames before notify new AudioSpecificConfig
+                this.dispatchAudioMediaSegment();
+                // notify new AAC AudioSpecificConfig
+                this.dispatchAudioInitSegment(audio_sample);
+            }
+
+            last_sample_pts_ms = sample_pts_ms;
+            let sample_pts_ms_int = Math.floor(sample_pts_ms);
+
+            let aac_sample = {
+                unit: aac_frame.data,
+                length: aac_frame.data.byteLength,
+                pts: sample_pts_ms_int,
+                dts: sample_pts_ms_int
+            };
+            this.audio_track_.samples.push(aac_sample);
+            this.audio_track_.length += aac_frame.data.byteLength;
+
+            sample_pts_ms += ref_sample_duration;
+        }
+
+        if (loas_parser.hasIncompleteData()) {
+            this.aac_last_incomplete_data_ = loas_parser.getIncompleteData();
+        }
+
+        if (last_sample_pts_ms) {
+            this.aac_last_sample_pts_ = last_sample_pts_ms;
+        }
+    }
+
+    private parseAC3Payload(data: Uint8Array, pts: number) {
+        if (this.has_video_ && !this.video_init_segment_dispatched_) {
+            // If first video IDR frame hasn't been detected,
+            // Wait for first IDR frame and video init segment being dispatched
+            return;
+        }
+
+        let ref_sample_duration: number;
+        let base_pts_ms: number;
+
+        if (pts != undefined) {
+            base_pts_ms = pts / this.timescale_;
+        }
+
+        if (this.audio_metadata_.codec === 'ac-3') {
+            if (pts == undefined && this.aac_last_sample_pts_ != undefined) {
+                ref_sample_duration = 1536 / this.audio_metadata_.sampling_frequency * 1000;;
+                base_pts_ms = this.aac_last_sample_pts_ + ref_sample_duration;
+            } else if (pts == undefined){
+                Log.w(this.TAG, `AC3: Unknown pts`);
+                return;
+            }
+        }
+
+        let adts_parser = new AC3Parser(data);
+        let ac3_frame: AC3Frame = null;
+        let sample_pts_ms = base_pts_ms;
+        let last_sample_pts_ms: number;
+
+        while ((ac3_frame = adts_parser.readNextAC3Frame()) != null) {
+            ref_sample_duration = 1536 / ac3_frame.sampling_frequency * 1000;
+            const audio_sample = {
+                codec: 'ac-3',
+                data: ac3_frame
+            } as const;
+
+            if (this.audio_init_segment_dispatched_ == false) {
+                this.audio_metadata_ = {
+                    codec: 'ac-3',
+                    sampling_frequency: ac3_frame.sampling_frequency,
+                    bit_stream_identification: ac3_frame.bit_stream_identification,
+                    bit_stream_mode: ac3_frame.bit_stream_mode,
+                    low_frequency_effects_channel_on: ac3_frame.low_frequency_effects_channel_on,
+                    channel_mode: ac3_frame.channel_mode,
+                };
+                this.dispatchAudioInitSegment(audio_sample);
+            } else if (this.detectAudioMetadataChange(audio_sample)) {
+                // flush stashed frames before notify new AudioSpecificConfig
+                this.dispatchAudioMediaSegment();
+                // notify new AAC AudioSpecificConfig
+                this.dispatchAudioInitSegment(audio_sample);
+            }
+
+            last_sample_pts_ms = sample_pts_ms;
+            let sample_pts_ms_int = Math.floor(sample_pts_ms);
+
+            let ac3_sample = {
+                unit: ac3_frame.data,
+                length: ac3_frame.data.byteLength,
+                pts: sample_pts_ms_int,
+                dts: sample_pts_ms_int
+            };
+
+            this.audio_track_.samples.push(ac3_sample);
+            this.audio_track_.length += ac3_frame.data.byteLength;
+
+            sample_pts_ms += ref_sample_duration;
+        }
+
+        if (last_sample_pts_ms) {
+            this.aac_last_sample_pts_ = last_sample_pts_ms;
+        }
+    }
+
+    private parseEAC3Payload(data: Uint8Array, pts: number) {
+        if (this.has_video_ && !this.video_init_segment_dispatched_) {
+            // If first video IDR frame hasn't been detected,
+            // Wait for first IDR frame and video init segment being dispatched
+            return;
+        }
+
+        let ref_sample_duration: number;
+        let base_pts_ms: number;
+
+        if (pts != undefined) {
+            base_pts_ms = pts / this.timescale_;
+        }
+
+        if (this.audio_metadata_.codec === 'ec-3') {
+            if (pts == undefined && this.aac_last_sample_pts_ != undefined) {
+                ref_sample_duration = (256 * this.audio_metadata_.num_blks) / this.audio_metadata_.sampling_frequency * 1000; // TODO: AEC3 BLK
+                base_pts_ms = this.aac_last_sample_pts_ + ref_sample_duration;
+            } else if (pts == undefined){
+                Log.w(this.TAG, `EAC3: Unknown pts`);
+                return;
+            }
+        }
+
+        let adts_parser = new EAC3Parser(data);
+        let eac3_frame: EAC3Frame = null;
+        let sample_pts_ms = base_pts_ms;
+        let last_sample_pts_ms: number;
+
+        while ((eac3_frame = adts_parser.readNextEAC3Frame()) != null) {
+            ref_sample_duration = 1536 / eac3_frame.sampling_frequency * 1000; // TODO: EAC3 BLK
+            const audio_sample = {
+                codec: 'ec-3',
+                data: eac3_frame
+            } as const;
+
+            if (this.audio_init_segment_dispatched_ == false) {
+                this.audio_metadata_ = {
+                    codec: 'ec-3',
+                    sampling_frequency: eac3_frame.sampling_frequency,
+                    bit_stream_identification: eac3_frame.bit_stream_identification,
+                    low_frequency_effects_channel_on: eac3_frame.low_frequency_effects_channel_on,
+                    num_blks: eac3_frame.num_blks,
+                    channel_mode: eac3_frame.channel_mode,
+                };
+                this.dispatchAudioInitSegment(audio_sample);
+            } else if (this.detectAudioMetadataChange(audio_sample)) {
+                // flush stashed frames before notify new AudioSpecificConfig
+                this.dispatchAudioMediaSegment();
+                // notify new AAC AudioSpecificConfig
+                this.dispatchAudioInitSegment(audio_sample);
+            }
+
+            last_sample_pts_ms = sample_pts_ms;
+            let sample_pts_ms_int = Math.floor(sample_pts_ms);
+
+            let ac3_sample = {
+                unit: eac3_frame.data,
+                length: eac3_frame.data.byteLength,
+                pts: sample_pts_ms_int,
+                dts: sample_pts_ms_int
+            };
+
+            this.audio_track_.samples.push(ac3_sample);
+            this.audio_track_.length += eac3_frame.data.byteLength;
+
+            sample_pts_ms += ref_sample_duration;
+        }
+
+        if (last_sample_pts_ms) {
+            this.aac_last_sample_pts_ = last_sample_pts_ms;
+        }
+    }
+
+    private parseOpusPayload(data: Uint8Array, pts: number) {
+        if (this.has_video_ && !this.video_init_segment_dispatched_) {
+            // If first video IDR frame hasn't been detected,
+            // Wait for first IDR frame and video init segment being dispatched
+            return;
+        }
+
+        let ref_sample_duration: number;
+        let base_pts_ms: number;
+
+        if (pts != undefined) {
+            base_pts_ms = pts / this.timescale_;
+        }
+        if (this.audio_metadata_.codec === 'opus') {
+            if (pts == undefined && this.aac_last_sample_pts_ != undefined) {
+                ref_sample_duration = 20;
+                base_pts_ms = this.aac_last_sample_pts_ + ref_sample_duration;
+            } else if (pts == undefined){
+                Log.w(this.TAG, `Opus: Unknown pts`);
+                return;
+            }
+        }
+
+        let sample_pts_ms = base_pts_ms;
+        let last_sample_pts_ms: number;
+
+        for (let offset = 0; offset < data.length; ) {
+            ref_sample_duration = 20;
+
+            const opus_pending_trim_start = (data[offset + 1] & 0x10) !== 0;
+            const trim_end = (data[offset + 1] & 0x08) !== 0;
+            let index = offset + 2;
+            let size = 0;
+
+            while (data[index] === 0xFF) {
+              size += 255;
+              index += 1;
+            }
+            size += data[index];
+            index += 1;
+            index += opus_pending_trim_start ? 2 : 0;
+            index += trim_end ? 2 : 0;
+
+            last_sample_pts_ms = sample_pts_ms;
+            let sample_pts_ms_int = Math.floor(sample_pts_ms);
+            let sample = data.slice(index, index + size)
+
+            let opus_sample = {
+                unit: sample,
+                length: sample.byteLength,
+                pts: sample_pts_ms_int,
+                dts: sample_pts_ms_int
+            };
+            this.audio_track_.samples.push(opus_sample);
+            this.audio_track_.length += sample.byteLength;
+
+            sample_pts_ms += ref_sample_duration;
+            offset = index + size;
         }
 
         if (last_sample_pts_ms) {
@@ -1295,6 +1705,51 @@ class TSDemuxer extends BaseDemuxer {
                                 `${this.audio_metadata_.channel_config} to ${frame.channel_config}`);
                 return true;
             }
+        } else if (sample.codec === 'ac-3' && this.audio_metadata_.codec === 'ac-3') {
+            const frame = sample.data;
+            if (frame.sampling_frequency !== this.audio_metadata_.sampling_frequency) {
+                Log.v(this.TAG, `AC3: Sampling Frequency changed from ` +
+                                `${this.audio_metadata_.sampling_frequency} to ${frame.sampling_frequency}`);
+                return true;
+            }
+
+            if (frame.bit_stream_identification !== this.audio_metadata_.bit_stream_identification) {
+                Log.v(this.TAG, `AC3: Bit Stream Identification changed from ` +
+                                `${this.audio_metadata_.bit_stream_identification} to ${frame.bit_stream_identification}`);
+                return true;
+            }
+
+            if (frame.bit_stream_mode !== this.audio_metadata_.bit_stream_mode) {
+                Log.v(this.TAG, `AC3: BitStream Mode changed from ` +
+                                `${this.audio_metadata_.bit_stream_mode} to ${frame.bit_stream_mode}`);
+                return true;
+            }
+
+            if (frame.channel_mode !== this.audio_metadata_.channel_mode) {
+                Log.v(this.TAG, `AC3: Channel Mode changed from ` +
+                                `${this.audio_metadata_.channel_mode} to ${frame.channel_mode}`);
+                return true;
+            }
+
+            if (frame.low_frequency_effects_channel_on !== this.audio_metadata_.low_frequency_effects_channel_on) {
+                Log.v(this.TAG, `AC3: Low Frequency Effects Channel On changed from ` +
+                                `${this.audio_metadata_.low_frequency_effects_channel_on} to ${frame.low_frequency_effects_channel_on}`);
+                return true;
+            }
+        } else if (sample.codec === 'opus' && this.audio_metadata_.codec === 'opus') {
+            const data = sample.meta;
+
+            if (data.sample_rate !== this.audio_metadata_.sample_rate) {
+                Log.v(this.TAG, `Opus: SamplingFrequencyIndex changed from ` +
+                                `${this.audio_metadata_.sample_rate} to ${data.sample_rate}`);
+                return true;
+            }
+
+            if (data.channel_count !== this.audio_metadata_.channel_count) {
+                Log.v(this.TAG, `Opus: Channel count changed from ` +
+                                `${this.audio_metadata_.channel_count} to ${data.channel_count}`);
+                return true;
+            }
         } else if (sample.codec === 'mp3' && this.audio_metadata_.codec === 'mp3') {
             const data = sample.data;
             if (data.object_type !== this.audio_metadata_.object_type) {
@@ -1327,7 +1782,7 @@ class TSDemuxer extends BaseDemuxer {
         meta.duration = this.duration_;
 
         if (this.audio_metadata_.codec === 'aac') {
-            let aac_frame = sample.data as AACFrame;
+            let aac_frame = sample.codec === 'aac' ? sample.data : null;
             let audio_specific_config = new AudioSpecificConfig(aac_frame);
 
             meta.audioSampleRate = audio_specific_config.sampling_rate;
@@ -1335,6 +1790,33 @@ class TSDemuxer extends BaseDemuxer {
             meta.codec = audio_specific_config.codec_mimetype;
             meta.originalCodec = audio_specific_config.original_codec_mimetype;
             meta.config = audio_specific_config.config;
+            meta.refSampleDuration = 1024 / meta.audioSampleRate * meta.timescale;
+        } else if (this.audio_metadata_.codec === 'ac-3') {
+            let ac3_frame = sample.codec === 'ac-3' ? sample.data : null;
+            let ac3_config = new AC3Config(ac3_frame);
+            meta.audioSampleRate = ac3_config.sampling_rate
+            meta.channelCount = ac3_config.channel_count;
+            meta.codec = ac3_config.codec_mimetype;
+            meta.originalCodec = ac3_config.original_codec_mimetype;
+            meta.config = ac3_config.config;
+            meta.refSampleDuration = 1536 / meta.audioSampleRate * meta.timescale;
+        } else if (this.audio_metadata_.codec === 'ec-3') {
+            let ec3_frame = sample.codec === 'ec-3' ? sample.data : null;
+            let ec3_config = new EAC3Config(ec3_frame);
+            meta.audioSampleRate = ec3_config.sampling_rate
+            meta.channelCount = ec3_config.channel_count;
+            meta.codec = ec3_config.codec_mimetype;
+            meta.originalCodec = ec3_config.original_codec_mimetype;
+            meta.config = ec3_config.config;
+            meta.refSampleDuration = (256 * ec3_config.num_blks) / meta.audioSampleRate * meta.timescale; // TODO: blk size
+        } else if (this.audio_metadata_.codec === 'opus') {
+            meta.audioSampleRate = this.audio_metadata_.sample_rate;
+            meta.channelCount = this.audio_metadata_.channel_count;
+            meta.channelConfigCode = this.audio_metadata_.channel_config_code;
+            meta.codec = 'opus';
+            meta.originalCodec = 'opus';
+            meta.config = undefined;
+            meta.refSampleDuration = 20;
         } else if (this.audio_metadata_.codec === 'mp3') {
             meta.audioSampleRate = this.audio_metadata_.sample_rate;
             meta.channelCount = this.audio_metadata_.channel_count;
@@ -1342,8 +1824,6 @@ class TSDemuxer extends BaseDemuxer {
             meta.originalCodec = 'mp3';
             meta.config = undefined;
         }
-
-        meta.refSampleDuration = 1024 / meta.audioSampleRate * meta.timescale;
 
         if (this.audio_init_segment_dispatched_ == false) {
             Log.v(this.TAG, `Generated first AudioSpecificConfig for mimeType: ${meta.codec}`);
