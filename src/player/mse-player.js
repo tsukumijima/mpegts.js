@@ -400,11 +400,19 @@ class MSEPlayer {
     }
 
     switchPrimaryAudio() {
-        this._transmuxer.switchPrimaryAudio();
+        if (this._mseworker) {
+            this._mseworker.postMessage({ cmd: 'switchPrimaryAudio' });
+        } else {
+            this._transmuxer.switchPrimaryAudio();
+        }
     }
 
     switchSecondaryAudio() {
-        this._transmuxer.switchSecondaryAudio()
+        if (this._mseworker) {
+            this._mseworker.postMessage({ cmd: 'switchSecondaryAudio' });
+        } else {
+            this._transmuxer.switchSecondaryAudio();
+        }
     }
 
     get type() {

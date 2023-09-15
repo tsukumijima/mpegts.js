@@ -411,6 +411,14 @@ let MSEWorker = function (self) {
                 if (_transmuxer == null) { throw new IllegalStateException('Transmuxer not Initialized!'); }
                 _transmuxer.resume();
                 break;
+            case 'switchPrimaryAudio':
+                if (_transmuxer == null) { throw new IllegalStateException('Transmuxer not Initialized!'); }
+                _transmuxer.switchPrimaryAudio();
+                break;
+            case 'switchSecondaryAudio':
+                if (_transmuxer == null) { throw new IllegalStateException('Transmuxer not Initialized!'); }
+                _transmuxer.switchSecondaryAudio();
+                break;
             case 'logging_config': {
                 let config = e.data.param;
                 LoggingControl.applyConfig(config);
