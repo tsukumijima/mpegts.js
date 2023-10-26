@@ -142,6 +142,26 @@ class Transmuxer {
         }
     }
 
+    switchPrimaryAudio() {
+        if (this._worker) {
+            this._worker.postMessage({cmd: 'switch_audio', param: 'primary'});
+        } else {
+            if (this._controller._demuxer instanceof TSDemuxer) {
+                this._controller._demuxer.preferred_secondary_audio = false;
+            }
+        }
+    }
+
+    switchSecondaryAudio() {
+        if (this._worker) {
+            this._worker.postMessage({cmd: 'switch_audio', param: 'secondary'});
+        } else {
+            if (this._controller._demuxer instanceof TSDemuxer) {
+                this._controller._demuxer.preferred_secondary_audio = true;
+            }
+        }
+    }
+
     _onInitSegment(type, initSegment) {
         // do async invoke
         Promise.resolve().then(() => {

@@ -380,6 +380,8 @@ declare namespace Mpegts {
     }
 
     interface MSEPlayer extends Player {
+        switchPrimaryAudio(): void;
+        switchSecondaryAudio(): void;
         mediaInfo: MSEPlayerMediaInfo;
         statisticsInfo: MSEPlayerStatisticsInfo;
     }

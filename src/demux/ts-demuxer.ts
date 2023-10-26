@@ -151,6 +151,8 @@ class TSDemuxer extends BaseDemuxer {
     private video_track_ = {type: 'video', id: 1, sequenceNumber: 0, samples: [], length: 0};
     private audio_track_ = {type: 'audio', id: 2, sequenceNumber: 0, samples: [], length: 0};
 
+    public preferred_secondary_audio = false;
+
     public constructor(probe_data: any, config: any) {
         super();
 
@@ -790,15 +792,16 @@ class TSDemuxer extends BaseDemuxer {
                 pmt.common_pids.h264 = elementary_PID;
             } else if (stream_type === StreamType.kH265 && !already_has_video) {
                 pmt.common_pids.h265 = elementary_PID;
-            } else if (stream_type === StreamType.kADTSAAC && !already_has_audio) {
+            } else if (stream_type === StreamType.kADTSAAC && (!already_has_audio || this.preferred_secondary_audio)) {
                 pmt.common_pids.adts_aac = elementary_PID;
-            } else if (stream_type === StreamType.kLOASAAC && !already_has_audio) {
+            } else if (stream_type === StreamType.kLOASAAC && (!already_has_audio || this.preferred_secondary_audio)) {
                 pmt.common_pids.loas_aac = elementary_PID;
-            } else if (stream_type === StreamType.kAC3 && !already_has_audio) {
+            } else if (stream_type === StreamType.kAC3 && (!already_has_audio || this.preferred_secondary_audio)) {
                 pmt.common_pids.ac3 = elementary_PID; // ATSC AC-3
-            } else if (stream_type === StreamType.kEAC3 && !already_has_audio) {
+            } else if (stream_type === StreamType.kEAC3 && (!already_has_audio || this.preferred_secondary_audio)) {
                 pmt.common_pids.eac3 = elementary_PID; // ATSC EAC-3
-            } else if ((stream_type === StreamType.kMPEG1Audio || stream_type === StreamType.kMPEG2Audio) && !already_has_audio) {
+            } else if ((stream_type === StreamType.kMPEG1Audio || stream_type === StreamType.kMPEG2Audio) &&
+                       (!already_has_audio || this.preferred_secondary_audio)) {
                 pmt.common_pids.mp3 = elementary_PID;
             } else if (stream_type === StreamType.kPESPrivateData) {
                 pmt.pes_private_data_pids[elementary_PID] = true;

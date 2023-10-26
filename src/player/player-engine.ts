@@ -29,6 +29,8 @@ export default interface PlayerEngine {
     play(): Promise<void>;
     pause(): void;
     seek(seconds: number): void;
+    switchPrimaryAudio(): void;
+    switchSecondaryAudio(): void;
     readonly mediaInfo: MediaInfo | undefined;
     readonly statisticsInfo: any | undefined;
 }

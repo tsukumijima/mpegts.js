@@ -37,7 +37,8 @@ import {
     WorkerCommandPacketLoggingConfig,
     WorkerCommandPacketTimeUpdate,
     WorkerCommandPacketReadyStateChange,
-    WorkerCommandPacketUnbufferedSeek
+    WorkerCommandPacketUnbufferedSeek,
+    WorkerCommandPacketSwitchAudio,
 } from './player-engine-worker-cmd-def.js';
 import {
     WorkerMessagePacket,
@@ -276,6 +277,20 @@ class PlayerEngineDedicatedThread implements PlayerEngine {
         } else {
             this._pending_seek_time = seconds;
         }
+    }
+
+    public switchPrimaryAudio(): void {
+        this._worker.postMessage({
+            cmd: 'switch_audio',
+            audio_track: 'primary',
+        } as WorkerCommandPacketSwitchAudio);
+    }
+
+    public switchSecondaryAudio(): void {
+        this._worker.postMessage({
+            cmd: 'switch_audio',
+            audio_track: 'secondary',
+        } as WorkerCommandPacketSwitchAudio);
     }
 
     public get mediaInfo(): MediaInfo {
