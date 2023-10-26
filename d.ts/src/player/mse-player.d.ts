@@ -14,6 +14,8 @@ declare class MSEPlayer {
     unload(): void;
     play(): Promise<void>;
     pause(): void;
+    switchPrimaryAudio(): void;
+    switchSecondaryAudio(): void;
     get type(): string;
     get buffered(): TimeRanges;
     get duration(): number;

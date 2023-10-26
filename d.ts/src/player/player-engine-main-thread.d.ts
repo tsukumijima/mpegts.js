@@ -31,6 +31,8 @@ declare class PlayerEngineMainThread implements PlayerEngine {
     play(): Promise<void>;
     pause(): void;
     seek(seconds: number): void;
+    switchPrimaryAudio(): void;
+    switchSecondaryAudio(): void;
     get mediaInfo(): MediaInfo;
     get statisticsInfo(): any;
     private _onMSESourceOpen;
