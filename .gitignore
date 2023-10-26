@@ -4,6 +4,7 @@
 
 node_modules
 npm-debug.log
+.node-version
 
 #################
 ## Grunt
@@ -13,7 +14,7 @@ npm-debug.log
 _SpecRunner.html
 reports
 jsdoc
-dist
+# dist
 build/temp
 coverage/
 
