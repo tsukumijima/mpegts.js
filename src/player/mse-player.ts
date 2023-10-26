@@ -99,7 +99,7 @@ class MSEPlayer {
     }
 
     public switchSecondaryAudio(): void {
-        this._player_engine.switchPrimaryAudio();
+        this._player_engine.switchSecondaryAudio();
     }
 
     public get type(): string {

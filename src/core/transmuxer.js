@@ -24,6 +24,7 @@ import TransmuxingController from './transmuxing-controller.js';
 import TransmuxingEvents from './transmuxing-events';
 import TransmuxingWorker from './transmuxing-worker.js';
 import MediaInfo from './media-info.js';
+import TSDemuxer from '../demux/ts-demuxer.ts';
 
 class Transmuxer {
 
