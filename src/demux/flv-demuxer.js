@@ -1175,7 +1175,7 @@ class FLVDemuxer {
         let version = v.getUint8(0);  // configurationVersion
         let hevcProfile = v.getUint8(1) & 0x1F;  // hevcProfileIndication
 
-        if (version !== 1 || hevcProfile === 0) {
+        if ((version !== 0 && version !== 1) || hevcProfile === 0) {
             this._onError(DemuxErrors.FORMAT_ERROR, 'Flv: Invalid HEVCDecoderConfigurationRecord');
             return;
         }
@@ -1461,9 +1461,9 @@ class FLVDemuxer {
                 return;
             }
 
-            let unitType = v.getUint8(offset + lengthSize) & 0x1F;
+            let unitType = (v.getUint8(offset + lengthSize) >> 1) & 0x3F;
 
-            if (unitType === 19 || unitType === 20) {  // IDR
+            if (unitType === 19 || unitType === 20 || unitType === 21) {  // IRAP
                 keyframe = true;
             }
 
