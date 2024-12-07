@@ -467,6 +467,7 @@ declare namespace Mpegts {
 declare var Mpegts: {
     createPlayer(mediaDataSource: Mpegts.MediaDataSource, config?: Mpegts.Config): Mpegts.Player;
     isSupported(): boolean;
+    supportWorkerForMSEH265Playback(): Promise<boolean>;
     getFeatureList(): Mpegts.FeatureList;
 
     /**
