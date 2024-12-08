@@ -1,4 +1,5 @@
 declare class LiveLatencySynchronizer {
+    TAG: string;
     private _config;
     private _media_element;
     private e?;
