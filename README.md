@@ -14,7 +14,23 @@ mpegts.js works by transmuxing MPEG2-TS stream into ISO BMFF (Fragmented MP4) se
 [Media Source Extensions]: https://w3c.github.io/media-source/
 
 ## News
-- v1.7.3
+- **v1.8.0**
+
+    Support working on **iOS Safari** with iOS 17.1+ through Apple's [ManagedMediaSource API](https://github.com/w3c/media-source/issues/320)
+
+    Great performance improvements by supporting [MSE in Workers](https://github.com/w3c/media-source/issues/175) on Chrome, Safari 18 (includes iOS)
+
+    Introduced support for [AV1 over MPEG-TS](https://aomediacodec.github.io/av1-mpeg2-ts/)
+
+    Introduced support for AV1 over HTTP-FLV defined in [Enhanced RTMP](https://github.com/veovera/enhanced-rtmp)
+
+    Support chasing live latency more smoothly by changing playback rate
+
+    Introduced ATSC EAC-3 audio codec in MPEG-TS
+
+    Support Opus and FLAC audio codec over HTTP-FLV (Enhanced RTMP)
+
+- **v1.7.3**
 
     Introduced [Enhanced RTMP] with HEVC support for FLV.
 
@@ -22,7 +38,7 @@ mpegts.js works by transmuxing MPEG2-TS stream into ISO BMFF (Fragmented MP4) se
 
     Introduced LOAS AAC support for MPEG-TS.
 
-- v1.7.0
+- **v1.7.0**
 
     Introduced H.265/HEVC over MPEG-TS/FLV support.
 
@@ -87,8 +103,6 @@ mpegts.js could be tested with [Simple Realtime Server](https://github.com/ossrs
 
 ## TODO
 - MPEG2-TS static file playback (seeking is not supported now)
-- MP3/AC3 audio codec support
-- AV1/OPUS codec over MPEG2-TS stream support (?)
 
 ## Limitations
 - mpeg2video is not supported
