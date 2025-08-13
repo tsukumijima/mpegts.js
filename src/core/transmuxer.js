@@ -17,7 +17,7 @@
  */
 
 import EventEmitter from 'events';
-import work from 'webworkify-webpack';
+import work from '../utils/webworkify-webpack';
 import Log from '../utils/logger.js';
 import LoggingControl from '../utils/logging-control.js';
 import TransmuxingController from './transmuxing-controller.js';
@@ -209,7 +209,13 @@ class Transmuxer {
     _onTimedID3MetadataArrived (data) {
         Promise.resolve().then(() => {
             this._emitter.emit(TransmuxingEvents.TIMED_ID3_METADATA_ARRIVED, data);
-        })
+        });
+    }
+
+    _onPGSSubtitleArrived (data) {
+        Promise.resolve().then(() => {
+            this._emitter.emit(TransmuxingEvents.PGS_SUBTITLE_ARRIVED, data);
+        });
     }
 
     _onSynchronousKLVMetadataArrived (data) {
@@ -305,6 +311,7 @@ class Transmuxer {
             case TransmuxingEvents.METADATA_ARRIVED:
             case TransmuxingEvents.SCRIPTDATA_ARRIVED:
             case TransmuxingEvents.TIMED_ID3_METADATA_ARRIVED:
+            case TransmuxingEvents.PGS_SUBTITLE_ARRIVED:
             case TransmuxingEvents.SYNCHRONOUS_KLV_METADATA_ARRIVED:
             case TransmuxingEvents.ASYNCHRONOUS_KLV_METADATA_ARRIVED:
             case TransmuxingEvents.SMPTE2038_METADATA_ARRIVED:
