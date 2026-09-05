@@ -517,6 +517,15 @@ class MSEController {
     _onSourceOpen() {
         Log.v(this.TAG, 'MediaSource onSourceOpen');
         this._mediaSource.removeEventListener('sourceopen', this.e.onSourceOpen);
+        // Expose live streams to native media controls before appending any data.
+        if (this._config.isLive === true && this._mediaSource.readyState === 'open') {
+            try {
+                this._mediaSource.duration = Infinity;
+            } catch (error) {
+                // A duration update failure must not prevent playback initialization.
+                Log.e(this.TAG, `Failed to set live MediaSource duration: ${error.message}`);
+            }
+        }
         // deferred sourcebuffer creation / initialization
         if (this._pendingSourceBufferInit.length > 0) {
             let pendings = this._pendingSourceBufferInit;
