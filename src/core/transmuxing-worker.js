@@ -36,11 +36,11 @@ import TSDemuxer from '../demux/ts-demuxer.ts';
    }
  */
 
-let TransmuxingWorker = function (self) {
+const TransmuxingWorker = function (self) {
 
-    let TAG = 'TransmuxingWorker';
+    const TAG = 'TransmuxingWorker';
     let controller = null;
-    let logcatListener = onLogcatCallback.bind(this);
+    const logcatListener = onLogcatCallback.bind(this);
 
     Polyfill.install();
 
@@ -92,7 +92,7 @@ let TransmuxingWorker = function (self) {
                 controller.resume();
                 break;
             case 'logging_config': {
-                let config = e.data.param;
+                const config = e.data.param;
                 LoggingControl.applyConfig(config);
 
                 if (config.enableCallback === true) {
@@ -115,7 +115,7 @@ let TransmuxingWorker = function (self) {
     });
 
     function onInitSegment(type, initSegment) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.INIT_SEGMENT,
             data: {
                 type: type,
@@ -126,7 +126,7 @@ let TransmuxingWorker = function (self) {
     }
 
     function onMediaSegment(type, mediaSegment) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.MEDIA_SEGMENT,
             data: {
                 type: type,
@@ -137,21 +137,21 @@ let TransmuxingWorker = function (self) {
     }
 
     function onLoadingComplete() {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.LOADING_COMPLETE
         };
         self.postMessage(obj);
     }
 
     function onRecoveredEarlyEof() {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.RECOVERED_EARLY_EOF
         };
         self.postMessage(obj);
     }
 
     function onMediaInfo(mediaInfo) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.MEDIA_INFO,
             data: mediaInfo
         };
@@ -159,7 +159,7 @@ let TransmuxingWorker = function (self) {
     }
 
     function onMetaDataArrived(metadata) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.METADATA_ARRIVED,
             data: metadata
         };
@@ -167,7 +167,7 @@ let TransmuxingWorker = function (self) {
     }
 
     function onScriptDataArrived(data) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.SCRIPTDATA_ARRIVED,
             data: data
         };
@@ -175,7 +175,7 @@ let TransmuxingWorker = function (self) {
     }
 
     function onTimedID3MetadataArrived (data) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.TIMED_ID3_METADATA_ARRIVED,
             data: data
         };
@@ -183,7 +183,7 @@ let TransmuxingWorker = function (self) {
     }
 
     function onPGSSubtitleDataArrived (data) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.PGS_SUBTITLE_ARRIVED,
             data: data
         };
@@ -191,7 +191,7 @@ let TransmuxingWorker = function (self) {
     }
 
     function onSynchronousKLVMetadataArrived (data) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.SYNCHRONOUS_KLV_METADATA_ARRIVED,
             data: data
         };
@@ -199,7 +199,7 @@ let TransmuxingWorker = function (self) {
     }
 
     function onAsynchronousKLVMetadataArrived (data) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.ASYNCHRONOUS_KLV_METADATA_ARRIVED,
             data: data
         };
@@ -207,7 +207,7 @@ let TransmuxingWorker = function (self) {
     }
 
     function onSMPTE2038MetadataArrived (data) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.SMPTE2038_METADATA_ARRIVED,
             data: data
         };
@@ -215,7 +215,7 @@ let TransmuxingWorker = function (self) {
     }
 
     function onSEIArrived (data) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.SEI_ARRIVED,
             data: data
         };
@@ -223,7 +223,7 @@ let TransmuxingWorker = function (self) {
     }
 
     function onSCTE35MetadataArrived (data) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.SCTE35_METADATA_ARRIVED,
             data: data
         };
@@ -231,7 +231,7 @@ let TransmuxingWorker = function (self) {
     }
 
     function onPESPrivateDataDescriptor(data) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.PES_PRIVATE_DATA_DESCRIPTOR,
             data: data
         };
@@ -239,7 +239,7 @@ let TransmuxingWorker = function (self) {
     }
 
     function onPESPrivateDataArrived(data) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.PES_PRIVATE_DATA_ARRIVED,
             data: data
         };
@@ -247,7 +247,7 @@ let TransmuxingWorker = function (self) {
     }
 
     function onStatisticsInfo(statInfo) {
-        let obj = {
+        const obj = {
             msg: TransmuxingEvents.STATISTICS_INFO,
             data: statInfo
         };

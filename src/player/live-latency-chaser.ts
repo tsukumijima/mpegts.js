@@ -20,8 +20,8 @@
 class LiveLatencyChaser {
 
     private _config: any = null;
-    private _media_element: HTMLMediaElement = null;
-    private _on_direct_seek: (target: number) => void = null;
+    private _media_element: HTMLMediaElement;
+    private _on_direct_seek: (target: number) => void;
 
     public constructor(config: any, media_element: HTMLMediaElement, on_direct_seek: (target: number) => void) {
         this._config = config;
@@ -30,8 +30,8 @@ class LiveLatencyChaser {
     }
 
     public destroy(): void {
-        this._on_direct_seek = null;
-        this._media_element = null;
+        this._on_direct_seek = null!;
+        this._media_element = null!;
         this._config = null;
     }
 
@@ -55,7 +55,7 @@ class LiveLatencyChaser {
         const buffered_end = buffered.end(buffered.length - 1);
         if (buffered_end > this._config.liveBufferLatencyMaxLatency) {
             if (buffered_end - current_time > this._config.liveBufferLatencyMaxLatency) {
-                let target_time = buffered_end - this._config.liveBufferLatencyMinRemain;
+                const target_time = buffered_end - this._config.liveBufferLatencyMinRemain;
                 this._on_direct_seek(target_time);
             }
         }

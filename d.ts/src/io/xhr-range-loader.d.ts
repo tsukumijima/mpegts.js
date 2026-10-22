@@ -1,0 +1,40 @@
+export default RangeLoader;
+declare class RangeLoader extends BaseLoader {
+    static isSupported(): boolean;
+    constructor(seekHandler: any, config: any);
+    TAG: string;
+    _seekHandler: any;
+    _config: any;
+    _chunkSizeKBList: number[];
+    _currentChunkSizeKB: number;
+    _currentSpeedNormalized: number;
+    _zeroSpeedChunkCount: number;
+    _xhr: XMLHttpRequest | null;
+    _speedSampler: SpeedSampler;
+    _requestAbort: boolean;
+    _waitForTotalLength: boolean;
+    _totalLengthReceived: boolean;
+    _currentRequestURL: any;
+    _currentRedirectedURL: any;
+    _currentRequestRange: {
+        from: any;
+        to: any;
+    } | null;
+    _totalLength: any;
+    _contentLength: number | null;
+    _receivedLength: number;
+    _lastTimeLoaded: number;
+    get currentSpeed(): number;
+    _dataSource: any;
+    _range: any;
+    _openSubRange(): void;
+    _internalOpen(dataSource: any, range: any): void;
+    _internalAbort(): void;
+    _onReadyStateChange(e: any): void;
+    _onProgress(e: any): void;
+    _normalizeSpeed(input: any): number | undefined;
+    _onLoad(e: any): void;
+    _onXhrError(e: any): void;
+}
+import { BaseLoader } from './loader.js';
+import SpeedSampler from './speed-sampler.js';

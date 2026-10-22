@@ -106,7 +106,7 @@ npm run build               # packaged & minimized js will be emitted in dist fo
 ## Limitations
 - 不支持 mpeg2video
 - IE11 等旧浏览器不支持 HTTP MPEG2-TS/FLV 直播流回放
-- iOS 由于屏蔽了 [Media Source Extensions][] 因而无法使用，但在 iPadOS 上可用
+- iOS 播放需要通过 iOS 17.1+ 提供的 ManagedMediaSource API。iOS 17.0 及更早版本仍不可用。
 
 ## Features inherited from flv.js
 - H.264 + AAC / MP3 编码的 FLV 文件回放

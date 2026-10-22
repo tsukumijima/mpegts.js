@@ -32,9 +32,9 @@ import {InvalidArgumentException} from './utils/exception.js';
 Polyfill.install();
 
 
-// factory method
+/** @returns {MSEPlayer | NativePlayer} */
 function createPlayer(mediaDataSource, optionalConfig) {
-    let mds = mediaDataSource;
+    const mds = mediaDataSource;
     if (mds == null || typeof mds !== 'object') {
         throw new InvalidArgumentException('MediaDataSource must be an javascript object!');
     }
@@ -70,7 +70,7 @@ function supportWorkerForMSEH265Playback() {
 
 
 // interfaces
-let mpegts = {};
+const mpegts = {};
 
 mpegts.createPlayer = createPlayer;
 mpegts.isSupported = isSupported;

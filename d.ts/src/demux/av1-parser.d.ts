@@ -11,9 +11,10 @@ type SequenceHeaderDetails = {
     delta_frame_id_length_minus_2?: number;
     reduced_still_picture_header: boolean;
     decoder_model_info_present_flag: boolean;
-    operating_points_cnt_minus_1?: number;
+    operating_points_cnt_minus_1: number;
     operating_points: OperatingPoint[];
     buffer_removal_time_length_minus_1: number;
+    frame_presentation_time_length_minus_1: number;
     equal_picture_interval: boolean;
     seq_force_screen_content_tools: number;
     seq_force_integer_mv: number;
@@ -66,7 +67,7 @@ type AV1Metadata = {
     };
 };
 declare class AV1OBUParser {
-    static parseOBUs(uint8array: Uint8Array, meta?: AV1Metadata | null): AV1Metadata;
+    static parseOBUs(uint8array: Uint8Array, meta?: AV1Metadata | null): AV1Metadata | null | undefined;
     static parseSeuqneceHeader(uint8array: Uint8Array): Omit<AV1Metadata, 'sequence_header_data'>;
     static parseOBUFrameHeader(uint8array: Uint8Array, temporal_id: number, spatial_id: number, meta: AV1Metadata): AV1Metadata;
     static frameSizeAndRenderSize(gb: ExpGolomb, frame_size_override_flag: boolean, sequence_header: SequenceHeaderDetails): FrameResolutions;

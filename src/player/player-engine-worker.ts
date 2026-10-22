@@ -25,7 +25,7 @@ import MSEController from '../core/mse-controller';
 import Transmuxer from "../core/transmuxer";
 import TransmuxingEvents from '../core/transmuxing-events';
 import PlayerEvents from './player-events';
-import { ErrorTypes } from './player-errors';
+import { ErrorTypes, ErrorDetails } from './player-errors';
 import {
     WorkerCommandPacket,
     WorkerCommandPacketInit,
@@ -51,13 +51,13 @@ import {
 const PlayerEngineWorker = (self: DedicatedWorkerGlobalScope) => {
     const TAG: string = 'PlayerEngineWorker';
 
-    const logcat_callback: (type: string, str: string) => void = onLogcatCallback.bind(this);
+    const logcat_callback: (type: string, str: string) => void = onLogcatCallback;
 
     let media_data_source: any = null;
     let config: any = null;
 
-    let mse_controller: MSEController = null;
-    let transmuxer: Transmuxer = null;
+    let mse_controller: MSEController | null = null;
+    let transmuxer: Transmuxer | null = null;
 
     let mse_source_opened: boolean = false;
     let has_pending_load: boolean = false;
@@ -110,8 +110,8 @@ const PlayerEngineWorker = (self: DedicatedWorkerGlobalScope) => {
                 break;
             case 'unbuffered_seek': {
                 const packet = command_packet as WorkerCommandPacketUnbufferedSeek;
-                mse_controller.flush();
-                transmuxer.seek(packet.milliseconds);
+                mse_controller!.flush();
+                transmuxer!.seek(packet.milliseconds);
                 break;
             }
             case 'timeupdate': {
@@ -125,17 +125,17 @@ const PlayerEngineWorker = (self: DedicatedWorkerGlobalScope) => {
                 break;
             }
             case 'pause_transmuxer':
-                transmuxer.pause();
+                transmuxer!.pause();
                 break;
             case 'resume_transmuxer':
-                transmuxer.resume();
+                transmuxer!.resume();
                 break;
             case 'switch_audio': {
                 const packet = command_packet as WorkerCommandPacketSwitchAudio;
                 if (packet.audio_track === 'primary') {
-                    transmuxer.switchPrimaryAudio();
+                    transmuxer!.switchPrimaryAudio();
                 } else if (packet.audio_track === 'secondary') {
-                    transmuxer.switchSecondaryAudio();
+                    transmuxer!.switchSecondaryAudio();
                 }
                 break;
             }
@@ -159,16 +159,16 @@ const PlayerEngineWorker = (self: DedicatedWorkerGlobalScope) => {
     function initializeMSE(): void {
         Log.v(TAG, 'Initializing MediaSource in DedicatedWorker');
         mse_controller = new MSEController(config);
-        mse_controller.on(MSEEvents.SOURCE_OPEN, onMSESourceOpen.bind(this));
-        mse_controller.on(MSEEvents.UPDATE_END, onMSEUpdateEnd.bind(this));
-        mse_controller.on(MSEEvents.BUFFER_FULL, onMSEBufferFull.bind(this));
-        mse_controller.on(MSEEvents.ERROR, onMSEError.bind(this));
+        mse_controller.on(MSEEvents.SOURCE_OPEN, onMSESourceOpen);
+        mse_controller.on(MSEEvents.UPDATE_END, onMSEUpdateEnd);
+        mse_controller.on(MSEEvents.BUFFER_FULL, onMSEBufferFull);
+        mse_controller.on(MSEEvents.ERROR, onMSEError);
         mse_controller.initialize({
             getCurrentTime: () => media_element_current_time,
             getReadyState: () => media_element_ready_state,
         });
 
-        let handle = mse_controller.getHandle();
+        const handle = mse_controller.getHandle();
         self.postMessage({
             msg: 'mse_init',
             handle: handle,
@@ -201,17 +201,17 @@ const PlayerEngineWorker = (self: DedicatedWorkerGlobalScope) => {
         transmuxer = new Transmuxer(media_data_source, config);
 
         transmuxer.on(TransmuxingEvents.INIT_SEGMENT, (type: string, is: any) => {
-            mse_controller.appendInitSegment(is);
+            mse_controller!.appendInitSegment(is);
         });
         transmuxer.on(TransmuxingEvents.MEDIA_SEGMENT, (type: string, ms: any) => {
-            mse_controller.appendMediaSegment(ms);
+            mse_controller!.appendMediaSegment(ms);
             self.postMessage({
                 msg: 'buffered_position_changed',
                 buffered_position_milliseconds: ms.info.endDts,
             } as WorkerMessagePacketBufferedPositionChanged);
         });
         transmuxer.on(TransmuxingEvents.LOADING_COMPLETE, () => {
-            mse_controller.endOfStream();
+            mse_controller!.endOfStream();
             self.postMessage({
                 msg: 'player_event',
                 event: PlayerEvents.LOADING_COMPLETE,
@@ -329,7 +329,7 @@ const PlayerEngineWorker = (self: DedicatedWorkerGlobalScope) => {
             msg: 'player_event',
             event: PlayerEvents.ERROR,
             error_type: ErrorTypes.MEDIA_ERROR,
-            error_detail: ErrorTypes.MEDIA_MSE_ERROR,
+            error_detail: ErrorDetails.MEDIA_MSE_ERROR,
             info: info,
         } as WorkerMessagePacketPlayerEventError);
     }

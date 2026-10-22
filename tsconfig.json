@@ -1,13 +1,25 @@
 {
     "compilerOptions": {
         "outDir": "./dist/",
+        "allowSyntheticDefaultImports": true,
         "allowJs": true,
         "sourceMap": true,
         "module": "es6",
         "target": "es5",
+        // TypeScript 6 deprecates target: es5 and errors without this acknowledgement.
+        // The vendored webworkify shim rebuilds worker source from
+        // Function.prototype.toString(), so the output must stay ES5 for now.
+        "ignoreDeprecations": "6.0",
         "experimentalDecorators": true,
+        "strict": true,
         "declaration": true,
-        "declarationDir": "./d.ts/",
+        // d.ts/mpegts.d.ts is the hand-written public API surface (the "types" entry
+        // in package.json) and is NOT generated. Emit generated declarations into
+        // d.ts/src/ so that file lies outside declarationDir and cannot be
+        // overwritten, whatever the input set or inferred root happens to be.
+        "declarationDir": "./d.ts/src/",
+        "rootDir": "./src",
+        "types": ["node"],
         "lib": ["dom", "es5", "es2015.promise", "es2015.collection", "ESNext", "WebWorker"]
     },
     "include": [

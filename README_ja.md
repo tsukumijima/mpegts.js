@@ -102,7 +102,7 @@ npm run build               # packaged & minimized js will be emitted in dist fo
 ## Limitations
 - mpeg2video はサポートしていません。映像は H.264 であることが求められます
 - IE11 などの古いブラウザでは、HTTP MPEG2-TS がライブ視聴できません
-- iOS では、[Media Source Extensions][] が禁じられたため使えませんが、iPadOS では使用可能
+- iOS 17.1+ では Apple の ManagedMediaSource API により利用可能。iOS 17.0 以前は引き続き非対応
 
 ## Features inherited from flv.js
 - H.264 + AAC/MP3 codec の FLV ファイルが再生可能

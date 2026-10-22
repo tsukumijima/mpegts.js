@@ -1,4 +1,4 @@
-export declare class AC3Frame {
+export interface AC3Frame {
     sampling_frequency: number;
     sampling_rate_code: number;
     bit_stream_identification: number;
@@ -14,12 +14,12 @@ export declare class AC3Parser {
     private data_;
     private current_syncword_offset_;
     private eof_flag_;
-    private has_last_incomplete_data;
+    private has_last_incomplete_data_;
     constructor(data: Uint8Array);
     private findNextSyncwordOffset;
     readNextAC3Frame(): AC3Frame | null;
     hasIncompleteData(): boolean;
-    getIncompleteData(): Uint8Array;
+    getIncompleteData(): Uint8Array | null;
 }
 export declare class AC3Config {
     config: Array<number>;
@@ -33,7 +33,8 @@ export declare class AC3Config {
     original_codec_mimetype: string;
     constructor(frame: AC3Frame);
 }
-export declare class EAC3Frame {
+export interface EAC3Frame {
+    stream_type: number;
     sampling_frequency: number;
     sampling_rate_code: number;
     bit_stream_identification: number;
@@ -49,12 +50,12 @@ export declare class EAC3Parser {
     private data_;
     private current_syncword_offset_;
     private eof_flag_;
-    private has_last_incomplete_data;
+    private has_last_incomplete_data_;
     constructor(data: Uint8Array);
     private findNextSyncwordOffset;
     readNextEAC3Frame(): EAC3Frame | null;
     hasIncompleteData(): boolean;
-    getIncompleteData(): Uint8Array;
+    getIncompleteData(): Uint8Array | null;
 }
 export declare class EAC3Config {
     config: Array<number>;

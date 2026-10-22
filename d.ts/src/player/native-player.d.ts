@@ -1,0 +1,76 @@
+export default NativePlayer;
+declare class NativePlayer {
+    constructor(mediaDataSource: any, config: any);
+    TAG: string;
+    _type: string;
+    _emitter: EventEmitter<any>;
+    _config: {
+        enableWorker: boolean;
+        enableWorkerForMSE: boolean;
+        enableStashBuffer: boolean;
+        stashInitialSize: undefined;
+        isLive: boolean;
+        liveBufferLatencyChasing: boolean;
+        liveBufferLatencyChasingOnPaused: boolean;
+        liveBufferLatencyMaxLatency: number;
+        liveBufferLatencyMinRemain: number;
+        liveSync: boolean;
+        liveSyncMaxLatency: number;
+        liveSyncTargetLatency: number;
+        liveSyncPlaybackRate: number;
+        liveSyncMinLatency: undefined;
+        liveSyncMinPlaybackRate: number;
+        lazyLoad: boolean;
+        lazyLoadMaxDuration: number;
+        lazyLoadRecoverDuration: number;
+        deferLoadAfterSourceOpen: boolean;
+        autoCleanupMaxBackwardDuration: number;
+        autoCleanupMinBackwardDuration: number;
+        statisticsInfoReportInterval: number;
+        fixAudioTimestampGap: boolean;
+        accurateSeek: boolean;
+        seekType: string;
+        seekParamStart: string;
+        seekParamEnd: string;
+        rangeLoadZeroStart: boolean;
+        customSeekHandler: undefined;
+        reuseRedirectedURL: boolean;
+        headers: undefined;
+        customLoader: undefined;
+    };
+    e: {
+        onvLoadedMetadata: (e: any) => void;
+    };
+    _pendingSeekTime: any;
+    _statisticsReporter: number | null;
+    _mediaDataSource: any;
+    _mediaElement: any;
+    destroy(): void;
+    on(event: any, listener: any): void;
+    off(event: any, listener: any): void;
+    attachMediaElement(mediaElement: any): void;
+    detachMediaElement(): void;
+    load(): void;
+    unload(): void;
+    play(): any;
+    pause(): void;
+    get type(): string;
+    get buffered(): any;
+    get duration(): any;
+    set volume(value: any);
+    get volume(): any;
+    set muted(muted: any);
+    get muted(): any;
+    set currentTime(seconds: any);
+    get currentTime(): any;
+    get mediaInfo(): {
+        mimeType: string;
+    };
+    get statisticsInfo(): {
+        playerType: string;
+        url: any;
+    };
+    _onvLoadedMetadata(e: any): void;
+    _reportStatisticsInfo(): void;
+}
+import EventEmitter from 'events';

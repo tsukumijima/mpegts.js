@@ -10,9 +10,12 @@ function webpackBootstrapFunc (modules) {
 /******/      return installedModules[moduleId].exports;
 
 /******/    // Create a new module (and put it into the cache)
+/******/    // webpack 4 used i/l, webpack 5 uses id/loaded: provide both
 /******/    var module = installedModules[moduleId] = {
 /******/      i: moduleId,
+/******/      id: moduleId,
 /******/      l: false,
+/******/      loaded: false,
 /******/      exports: {}
 /******/    };
 
@@ -21,6 +24,7 @@ function webpackBootstrapFunc (modules) {
 
 /******/    // Flag the module as loaded
 /******/    module.l = true;
+/******/    module.loaded = true;
 
 /******/    // Return the exports of the module
 /******/    return module.exports;
@@ -32,22 +36,24 @@ function webpackBootstrapFunc (modules) {
 /******/  // expose the module cache
 /******/  __webpack_require__.c = installedModules;
 
-/******/  // identity function for calling harmony imports with the correct context
-/******/  __webpack_require__.i = function(value) { return value; };
-
-/******/  // define getter function for harmony exports
-/******/  __webpack_require__.d = function(exports, name, getter) {
-/******/    if(!__webpack_require__.o(exports, name)) {
-/******/      Object.defineProperty(exports, name, {
-/******/        configurable: false,
-/******/        enumerable: true,
-/******/        get: getter
-/******/      });
+/******/  // define getter functions for harmony exports
+/******/  // webpack 5 signature: d(exports, { name: getter, ... })
+/******/  __webpack_require__.d = function(exports, definition) {
+/******/    for(var key in definition) {
+/******/      if(__webpack_require__.o(definition, key) && !__webpack_require__.o(exports, key)) {
+/******/        Object.defineProperty(exports, key, {
+/******/          enumerable: true,
+/******/          get: definition[key]
+/******/        });
+/******/      }
 /******/    }
 /******/  };
 
 /******/  // define __esModule on exports
 /******/  __webpack_require__.r = function(exports) {
+/******/    if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+/******/      Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+/******/    }
 /******/    Object.defineProperty(exports, '__esModule', { value: true });
 /******/  };
 
@@ -56,20 +62,27 @@ function webpackBootstrapFunc (modules) {
 /******/    var getter = module && module.__esModule ?
 /******/      function getDefault() { return module['default']; } :
 /******/      function getModuleExports() { return module; };
-/******/    __webpack_require__.d(getter, 'a', getter);
+/******/    __webpack_require__.d(getter, { a: getter });
 /******/    return getter;
 /******/  };
 
 /******/  // Object.prototype.hasOwnProperty.call
 /******/  __webpack_require__.o = function(object, property) { return Object.prototype.hasOwnProperty.call(object, property); };
 
+/******/  // global object shortcut (__webpack_require__.g)
+/******/  __webpack_require__.g = (function() {
+/******/    if(typeof globalThis === 'object') return globalThis;
+/******/    try {
+/******/      return this || new Function('return this')();
+/******/    } catch (e) {
+/******/      if(typeof self === 'object') return self;
+/******/    }
+/******/  })();
+
 /******/  // __webpack_public_path__
 /******/  __webpack_require__.p = "/";
 
-/******/  // on error function for async loading
-/******/  __webpack_require__.oe = function(err) { console.error(err); throw err; };
-
-  var f = __webpack_require__(__webpack_require__.s = ENTRY_MODULE)
+  var f = __webpack_require__(ENTRY_MODULE)
   return f.default || f // try to call default if defined to also support babel esmodule exports
 }
 
@@ -90,7 +103,9 @@ function getModuleDependencies (sources, module, queueName) {
   retval[queueName] = []
 
   var fnString = module.toString()
-  var wrapperSignature = fnString.match(/^function\s?\w*\(\w+,\s*\w+,\s*(\w+)\)/)
+  // webpack 4 emits `function (module, exports, __webpack_require__)`, webpack 5 may
+  // emit an arrow wrapper and names unused params `__unused_webpack_module`.
+  var wrapperSignature = fnString.match(/^(?:function\s*\w*\s*)?\(\s*\w+\s*,\s*\w+\s*,\s*(\w+)\s*\)/)
   if (!wrapperSignature) return retval
   var webpackRequireName = wrapperSignature[1]
 
@@ -167,6 +182,7 @@ function getRequiredModules (sources, moduleId) {
   return requiredModules
 }
 
+/** @returns {Blob | Worker} */
 module.exports = function (moduleId, options) {
   options = options || {}
   var sources = {
